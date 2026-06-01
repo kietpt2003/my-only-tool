@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@source "../../**/*.{js,ts,jsx,tsx}";
+
+@keyframes marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+/* Khai báo rõ ràng với Tailwind V4 cho chu kỳ 15 giây */
+.animate-\[marquee_15s_linear_infinite\] {
+  animation: marquee 15s linear infinite;
+}
+
+@keyframes shineRed {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 200%;
+  }
+}
+
+/* Hiệu ứng mạch đập viền tỏa sáng liên tục */
+@keyframes borderPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(237, 44, 36, 0.4);
+    border-color: #ed2c24;
+  }
+  50% {
+    box-shadow: 0 0 15px 5px rgba(237, 44, 36, 0.2);
+    border-color: #ff6b66;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(237, 44, 36, 0.4);
+    border-color: #ed2c24;
+  }
+}
