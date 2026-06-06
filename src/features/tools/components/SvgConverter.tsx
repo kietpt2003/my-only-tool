@@ -78,10 +78,10 @@ const SvgConverter: React.FC = () => {
     setIsTracing(true);
     setIsAnalyzing(true);
 
-    const match = inputCode.match(/href="(data:image\/(png|jpeg|jpg);base64,[^"]+)"/i);
+    const match = inputCode.match(/(?:xlink:href|href)="(data:image\/(?:png|jpeg|jpg);base64,[^"]+)"/i);
 
     if (!match || !match[1]) {
-      setStatus({ message: "❌ Error: No embedded image data found for auto-focusing.", type: 'error' });
+      setStatus({ message: "❌ Error: No embedded image data found for auto-focusing. Ensure the SVG contains a Base64 image.", type: 'error' });
       setIsTracing(false);
       setIsAnalyzing(false);
       return;
@@ -90,18 +90,16 @@ const SvgConverter: React.FC = () => {
     const base64ImageUrl = match[1];
 
     if (!window.ImageTracer) {
-      alert("ImageTracer library is not loaded yet! Please check your network connection.");
+      alert("ImageTracer library is still loading. Please wait a second and try again!");
       setIsTracing(false);
       setIsAnalyzing(false);
       return;
     }
 
+    // Tiến hành gọi thư viện Trace ảnh
     window.ImageTracer.imageToSVG(
       base64ImageUrl,
       (tracedSvgString: string) => {
-        setIsAnalyzing(false);
-        setIsTracing(false);
-
         let finalTracedSvg = tracedSvgString;
 
         const wMatch = finalTracedSvg.match(/width="([\d.]+)"/i);
@@ -123,11 +121,15 @@ const SvgConverter: React.FC = () => {
         finalTracedSvg = finalTracedSvg.replace(/fill="[^"]+"/gi, 'fill="currentColor"');
 
         setOutputCode(finalTracedSvg);
-        setIsFakeSvg(false);
+        setIsFakeSvg(false); // Reset cờ để hiện nút Copy
         setStatus({
           message: "✨ Magic successful! The fake image has been successfully vectorized and maximized to fill the viewport.",
           type: 'success'
         });
+
+        // Tắt loading
+        setIsTracing(false);
+        setIsAnalyzing(false);
       },
       {
         ltres: 0.5,
@@ -159,6 +161,15 @@ const SvgConverter: React.FC = () => {
       setTimeout(() => setCopyText('Copy Code'), 2000);
     });
   };
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && !window.ImageTracer) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/imagetracerjs@1.2.6/imagetracer_v1.2.6.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   return (
     <div className="max-w-[1500px] mx-auto p-4 md:p-6 space-y-6">
@@ -275,7 +286,7 @@ const SvgConverter: React.FC = () => {
 
               {outputCode ? (
                 <div
-                  className="w-72 h-72 text-teal-600 flex items-center justify-center animate-[scaleIn_0.4s_cubic-bezier(0.175,0.885,0.32,1.275)] drop-shadow-xs"
+                  className="w-72 h-72 text-slate-900 flex items-center justify-center animate-[scaleIn_0.4s_cubic-bezier(0.175,0.885,0.32,1.275)] drop-shadow-xs"
                   dangerouslySetInnerHTML={{ __html: outputCode }}
                 />
               ) : (
