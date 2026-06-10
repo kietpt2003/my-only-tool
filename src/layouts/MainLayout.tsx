@@ -10,6 +10,7 @@ import CsToolsTab from '@/features/tools/components/CsToolsTab';
 import AdminTab from '@/features/tools/components/AdminTab';
 import { USER_ROLE } from '@/constants/user';
 import ChatWidget from '@/features/chat-widget/ChatWidget';
+import DonationModal from '@/components/DonationModal';
 import { useStore } from '@/store';
 
 interface UserPayload {
@@ -135,7 +136,10 @@ const MainLayout: React.FC = () => {
         </div>
 
       </div>
+
       <ChatWidget toastPosition='top-22 right-4' />
+
+      <DonationModal />
     </div>
   );
 };
