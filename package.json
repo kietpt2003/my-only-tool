@@ -7,6 +7,7 @@
     "build-prod": "cross-env NODE_ENV=production webpack --mode production"
   },
   "dependencies": {
+    "@paypal/react-paypal-js": "^10.0.0",
     "@react-oauth/google": "^0.13.5",
     "@vercel/blob": "^2.4.0",
     "axios": "^1.16.1",

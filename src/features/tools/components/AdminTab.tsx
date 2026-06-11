@@ -2,11 +2,24 @@ import React from 'react';
 import { observer } from 'mobx-react-lite';
 
 import { useStore } from '@/store';
-import { apiAdmin, AdminUser } from '@/services/apiAdmin';
+import { apiAdmin } from '@/services/apiAdmin';
 import { USER_ROLE } from '@/constants/user';
+import { PREMIUM_PLAN } from '@/constants/premiumPlan';
+
+interface ExtendedAdminUser {
+  id?: string;
+  email: string;
+  role: string;
+  createdAt?: string;
+  isSuperAdmin?: boolean;
+  hasUsedTrial?: boolean;
+  premiumPlan?: "NONE" | "TRIAL" | "DAILY" | "MONTHLY" | "YEARLY" | "LIFETIME";
+  premiumValidUntil?: string | null;
+}
 
 const AdminTab: React.FC = observer(() => {
   const {
+    authStore: { user: loggedInUser },
     languagesStore: {
       languages,
       isLoading,
@@ -16,13 +29,15 @@ const AdminTab: React.FC = observer(() => {
     }
   } = useStore();
 
-  const [users, setUsers] = React.useState<AdminUser[]>([]);
+  const [users, setUsers] = React.useState<ExtendedAdminUser[]>([]);
   const [isUsersLoading, setIsUsersLoading] = React.useState<boolean>(false);
   const [newUserEmail, setNewUserEmail] = React.useState('');
   const [newUserRole, setNewUserRole] = React.useState('user');
   const [newLangCode, setNewLangCode] = React.useState('');
   const [newLangName, setNewLangName] = React.useState('');
   const [isLangSubmitting, setIsLangSubmitting] = React.useState(false);
+
+  const isCurrentSuperAdmin = users.find(u => u.email === loggedInUser?.email)?.isSuperAdmin || false;
 
   const fetchUsers = async () => {
     setIsUsersLoading(true);
@@ -58,6 +73,39 @@ const AdminTab: React.FC = observer(() => {
     }
   };
 
+  const handlePlanChange = async (email: string, currentPlan: string, nextPlan: string) => {
+    if (currentPlan === nextPlan) return;
+
+    if (nextPlan === PREMIUM_PLAN.NONE) {
+      if (!window.confirm(`Cancel all VIP privileges and downgrade account ${email} to subscription (${PREMIUM_PLAN.NONE})?`)) {
+        fetchUsers();
+        return;
+      }
+      try {
+        const response = await apiAdmin.revokeUserPremium(email);
+        alert(response.data?.message || "Revoke subscription success!");
+        fetchUsers();
+      } catch (error: any) {
+        alert(error.response?.data?.message || 'The Premium subscription cannot be revoked.');
+        fetchUsers();
+      }
+      return;
+    }
+
+    if (!window.confirm(`Upgrade account ${email} to Premium [${nextPlan}]?`)) {
+      fetchUsers();
+      return;
+    }
+    try {
+      const response = await apiAdmin.grantUserPremium(email, nextPlan);
+      alert(response.data?.message || "Update success!");
+      fetchUsers();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Cannot update subscription');
+      fetchUsers();
+    }
+  };
+
   const handleAddLanguage = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLangSubmitting(true);
@@ -89,8 +137,33 @@ const AdminTab: React.FC = observer(() => {
     }
   }, []);
 
+  const renderPlanBadge = (u: ExtendedAdminUser) => {
+    if (u.isSuperAdmin) {
+      return (
+        <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-black bg-purple-100 text-purple-800 border border-purple-200">
+          ALL ACCESS
+        </span>
+      );
+    }
+
+    switch (u.premiumPlan) {
+      case "LIFETIME":
+        return <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">👑 {PREMIUM_PLAN.LIFETIME}</span>;
+      case "YEARLY":
+        return <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">💎 {PREMIUM_PLAN.YEARLY}</span>;
+      case "MONTHLY":
+        return <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 text-teal-700 border border-teal-200">📅 {PREMIUM_PLAN.MONTHLY}</span>;
+      case "DAILY":
+        return <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700 border border-amber-200">☀️ {PREMIUM_PLAN.DAILY}</span>;
+      case "TRIAL":
+        return <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-700 border border-orange-200">🎁 {PREMIUM_PLAN.TRIAL}</span>;
+      default:
+        return <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-400 border border-slate-200">{PREMIUM_PLAN.NONE}</span>;
+    }
+  };
+
   return (
-    <div className="max-w-[1200px] mx-auto p-4 md:p-6 space-y-8">
+    <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-8">
 
       {/* TITLE BLOCK */}
       <div>
@@ -98,14 +171,14 @@ const AdminTab: React.FC = observer(() => {
           <span>⚙️</span> Admin Management
         </h3>
         <p className="text-sm text-slate-500 mt-1">
-          Manage system users and translation languages.
+          Manage system users, dynamic premium tiers, and translation languages.
         </p>
       </div>
 
       {/* SECTION 1: MANAGE USERS */}
       <div className="bg-white border border-rose-100 rounded-2xl p-5 shadow-xs">
         <h4 className="text-lg font-bold text-rose-700 flex items-center gap-2 mb-4">
-          <span>👥</span> Manage Users
+          <span>👥</span> Manage Users & Licenses
         </h4>
 
         {/* Form thêm user */}
@@ -134,39 +207,92 @@ const AdminTab: React.FC = observer(() => {
           </button>
         </form>
 
-        {/* Bảng danh sách user */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full border-collapse text-sm text-left">
+        {/* Bảng danh sách user nâng cao */}
+        {/* 👉 ĐÃ SỬA: Loại bỏ min-w quá lớn, ép w-full tự co giãn trên mọi màn hình */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full border-collapse text-xs text-left table-fixed">
             <thead>
-              <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold">
-                <th className="p-3.5">Email</th>
-                <th className="p-3.5 w-[150px]">Role</th>
-                <th className="p-3.5 w-[100px] text-center">Action</th>
+              {/* 👉 ĐÃ ĐIỀU CHỈNH TỶ LỆ % CÁC CỘT ĐỂ CHỐNG ĐỤNG UI */}
+              <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold whitespace-nowrap">
+                <th className="px-3 py-2.5 w-[25%]">Email</th>           {/* Giảm từ 30% xuống 25% (vì đã có truncate) */}
+                <th className="px-3 py-2.5 w-[15%]">Role</th>            {/* Tăng từ 10% lên 15% để ôm trọn SUPER_ADMIN 🚀 */}
+                <th className="px-3 py-2.5 w-[15%]">Premium Plan</th>    {/* Tăng từ 13% lên 15% để ôm trọn ALL ACCESS 👑 */}
+                <th className="px-3 py-2.5 w-[15%]">Valid Until</th>     {/* Để 15% font-mono hiển thị rất đẹp */}
+                <th className="px-3 py-2.5 w-[20%] text-center">Premium Actions</th>
+                <th className="px-3 py-2.5 w-[10%] text-center">System</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isUsersLoading ? (
-                <tr><td colSpan={3} className="text-center p-6 text-slate-400 italic">Loading users...</td></tr>
+                <tr><td colSpan={6} className="text-center p-6 text-slate-400 italic">Loading users...</td></tr>
               ) : users.length === 0 ? (
-                <tr><td colSpan={3} className="text-center p-6 text-slate-400 italic">No users found.</td></tr>
+                <tr><td colSpan={6} className="text-center p-6 text-slate-400 italic">No users found.</td></tr>
               ) : (
                 users.map((u) => (
                   <tr key={u.email} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-3.5 font-medium text-slate-700">{u.email}</td>
-                    <td className="p-3.5">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider
-                        ${u.role === USER_ROLE.ADMIN
-                          ? 'bg-rose-50 text-rose-700 border border-rose-100'
-                          : 'bg-blue-50 text-blue-700 border border-blue-100'
+                    {/* Tối ưu hóa cắt chữ Email */}
+                    <td
+                      className="px-3 py-2.5 font-medium text-slate-700 truncate"
+                      title={u.email}
+                    >
+                      {u.email}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider
+                        ${u.role === 'super_admin'
+                          ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                          : u.role === USER_ROLE.ADMIN
+                            ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                            : 'bg-blue-50 text-blue-700 border border-blue-100'
                         }`}
                       >
                         {u.role}
                       </span>
                     </td>
-                    <td className="p-3.5 text-center">
+                    <td className="px-3 py-2.5">{renderPlanBadge(u)}</td>
+                    <td className="px-3 py-2.5 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                      {u.isSuperAdmin || u.premiumPlan === "LIFETIME"
+                        ? "∞ Permanent"
+                        : u.premiumValidUntil
+                          ? new Date(u.premiumValidUntil).toLocaleDateString('vi-VN', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit'
+                          })
+                          : "—"
+                      }
+                    </td>
+
+                    {/* CỘT PREMIUM ACTIONS DROPDOWN ĐÃ ĐƯỢC THU GỌN CHỮ */}
+                    <td className="px-3 py-2.5 text-center">
+                      {u.isSuperAdmin ? (
+                        <span className="text-[11px] text-slate-400 italic whitespace-nowrap">Super Admin bypassed</span>
+                      ) : (
+                        <select
+                          disabled={!isCurrentSuperAdmin}
+                          value={u.premiumPlan || "NONE"}
+                          onChange={(e) => handlePlanChange(u.email, u.premiumPlan || "NONE", e.target.value)}
+                          // 👉 ĐÃ SỬA: Thêm pr-7 (padding right) để mũi tên mặc định của trình duyệt không đè lên chữ
+                          className={`w-full max-w-[160px] px-2 pr-7 py-1 border border-slate-200 text-slate-700 bg-white rounded-lg text-[11px] font-semibold focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 shadow-2xs transition-all ${!isCurrentSuperAdmin
+                            ? "cursor-not-allowed opacity-50 bg-slate-50 border-slate-200 text-slate-400"
+                            : "cursor-pointer hover:border-slate-300"
+                            }`}
+                        >
+                          {/* 👉 ĐÃ SỬA: Rút cực gọn text option để giảm chiều rộng của ô select */}
+                          <option value="NONE">❌ NONE (Cancel)</option>
+                          <option value="TRIAL">🎁 TRIAL (7d)</option>
+                          <option value="DAILY">☀️ DAILY (1d)</option>
+                          <option value="MONTHLY">📅 MONTHLY</option>
+                          <option value="YEARLY">💎 YEARLY</option>
+                          <option value="LIFETIME">👑 LIFETIME</option>
+                        </select>
+                      )}
+                    </td>
+
+                    <td className="px-3 py-2.5 text-center">
                       <button
                         onClick={() => handleDeleteUser(u.email)}
-                        className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 font-medium rounded-md text-xs hover:bg-red-600 hover:text-white transition-all cursor-pointer"
+                        disabled={u.isSuperAdmin}
+                        className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-100 font-medium rounded-md text-xs hover:bg-red-600 hover:text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Delete
                       </button>
@@ -185,7 +311,6 @@ const AdminTab: React.FC = observer(() => {
           <span>🌍</span> Manage Languages
         </h4>
 
-        {/* Form thêm ngôn ngữ */}
         <form onSubmit={handleAddLanguage} className="flex flex-col sm:flex-row gap-3 mb-6">
           <input
             type="text"
@@ -212,7 +337,6 @@ const AdminTab: React.FC = observer(() => {
           </button>
         </form>
 
-        {/* Bảng danh sách ngôn ngữ */}
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full border-collapse text-sm text-left">
             <thead>

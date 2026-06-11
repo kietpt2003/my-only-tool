@@ -1,5 +1,14 @@
+import { PREMIUM_ERROR } from '@/constants/premiumPlan';
 import { REDMINE_AUTHEN_ERROR } from '@/constants/redmine';
 import axios, { AxiosError } from 'axios';
+
+interface BackendErrorData {
+  success?: boolean;
+  message?: string;
+  result?: string;
+  currentPlan?: string;
+  hasUsedTrial?: boolean;
+}
 
 // Cấu hình Base URL lấy từ biến môi trường (hoặc fix cứng tùy setup dự án của bạn)
 const API_URL = process.env.API_URL || '';
@@ -25,12 +34,19 @@ axiosInstance.interceptors.request.use(
 
 axiosInstance.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError<{ message?: string }>) => {
+  async (error: AxiosError<BackendErrorData>) => {
     const status = error.response?.status;
     const data = error.response?.data;
 
     if (status === 400 || status === 401 || status === 403 || status === 404) {
       const errorMessage = data?.message || '';
+
+      if (status === 403 && data?.result === PREMIUM_ERROR.PREMIUM_REQUIRED) {
+        if (typeof window !== 'undefined' && (window as any).showPremiumModal) {
+          (window as any).showPremiumModal(data?.currentPlan, data?.hasUsedTrial);
+        }
+        return Promise.reject(new Error(PREMIUM_ERROR.PREMIUM_REQUIRED));
+      }
 
       // Kiểm tra xem đây là lỗi của Hệ thống JWT App hay lỗi của Redmine Account
       const isRedmineError =

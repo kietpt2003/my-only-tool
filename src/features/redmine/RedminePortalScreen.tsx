@@ -11,6 +11,7 @@ import RedmineReportTab from './components/RedmineReportTab';
 import RedmineUserGuideModal from './components/RedmineUserGuideModal';
 import QuickDrafts from './components/QuickDrafts';
 import ChatWidget from '../chat-widget/ChatWidget';
+import PremiumSubscriptionModal from '@/components/PremiumSubscriptionModal';
 
 type TabMode = 'calendar' | 'explorer' | 'create' | 'report';
 
@@ -31,6 +32,9 @@ const RedminePortalScreen: React.FC = observer(() => {
       isLoggingIn,
       showLoginModal,
       setShowLoginModal,
+    },
+    authStore: {
+      user,
     }
   } = useStore();
 
@@ -236,6 +240,8 @@ const RedminePortalScreen: React.FC = observer(() => {
       )}
 
       {!showLoginModal && <ChatWidget position='bottom-20 right-6' toastPosition='top-8 right-4' />}
+
+      <PremiumSubscriptionModal userId={user?.id} />
     </div>
   );
 });

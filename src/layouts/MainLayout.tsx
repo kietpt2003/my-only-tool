@@ -1,5 +1,4 @@
 import React from 'react';
-import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from 'react-router-dom';
 
 import redmineLoo from '@/assets/redmine_logo.png';
@@ -11,14 +10,8 @@ import AdminTab from '@/features/tools/components/AdminTab';
 import { USER_ROLE } from '@/constants/user';
 import ChatWidget from '@/features/chat-widget/ChatWidget';
 import DonationModal from '@/components/DonationModal';
+import PremiumSubscriptionModal from '@/components/PremiumSubscriptionModal'; // 👉 STEP 1: Import Modal Premium mới vào đây
 import { useStore } from '@/store';
-
-interface UserPayload {
-  name: string;
-  email: string;
-  picture: string;
-  role: string;
-}
 
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -128,7 +121,6 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* --- CỘT PHẢI (Dashboard Panel) - Chiếm 1/3 không gian --- */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-1 h-full">
             <DashboardPanel />
@@ -140,6 +132,9 @@ const MainLayout: React.FC = () => {
       <ChatWidget toastPosition='top-22 right-4' />
 
       <DonationModal />
+
+      {/* 👉 STEP 2: Đặt cố định Component gác cổng Premium tại đây */}
+      <PremiumSubscriptionModal userId={user?.id} />
     </div>
   );
 };
