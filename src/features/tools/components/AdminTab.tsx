@@ -239,7 +239,7 @@ const AdminTab: React.FC = observer(() => {
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider
-                        ${u.role === 'super_admin'
+                        ${u.role === USER_ROLE.SUPER_ADMIN
                           ? 'bg-purple-50 text-purple-700 border border-purple-100'
                           : u.role === USER_ROLE.ADMIN
                             ? 'bg-rose-50 text-rose-700 border border-rose-100'

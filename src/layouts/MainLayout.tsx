@@ -43,15 +43,29 @@ const MainLayout: React.FC = () => {
     loadUserInfo(undefined, callback);
   }
 
-  // 👉 Component Helper: Render Badge siêu bắt mắt tùy theo cấp độ gói
-  const renderPremiumBadge = (plan?: string) => {
+  // 👉 Component Helper: Render Badge siêu bắt mắt
+  const renderPremiumBadge = () => {
+    if (user?.role === USER_ROLE.SUPER_ADMIN) {
+      return (
+        <button
+          disabled={true}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-purple-600 via-fuchsia-500 to-pink-500 text-white shadow-[0_0_12px_rgba(217,70,239,0.5)] uppercase tracking-wider border border-fuchsia-300/50 transition-transform cursor-default"
+        >
+          <span className="animate-pulse">💎</span> ALL ACCESS
+        </button>
+      );
+    }
+
+    // 2. Xử lý cho User thường dựa trên gói hiện tại
+    const plan = user?.premiumPlan;
+
     if (!plan || plan === PREMIUM_PLAN.NONE) {
       return (
         <button
           onClick={handleOpenUpgradeModal}
           className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition-colors cursor-pointer"
         >
-          FREE PLAN ➔
+          FREE PLAN
         </button>
       );
     }
@@ -119,8 +133,8 @@ const MainLayout: React.FC = () => {
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <div className="text-lg font-bold text-slate-900 leading-tight">{user?.name || 'Loading...'}</div>
 
-                  {/* 👉 RENDER BADGE GÓI CƯỚC TẠI ĐÂY */}
-                  {renderPremiumBadge(user?.premiumPlan)}
+                  {/* 👉 RENDER BADGE MỚI */}
+                  {renderPremiumBadge()}
                 </div>
 
                 <div className="text-sm text-slate-500 mt-1 flex items-center gap-2">
@@ -193,7 +207,7 @@ const MainLayout: React.FC = () => {
               </button>
 
               {/* ADMIN TAB */}
-              {user?.role === USER_ROLE.ADMIN && (
+              {(user?.role === USER_ROLE.ADMIN || user?.role === USER_ROLE.SUPER_ADMIN) && (
                 <button
                   onClick={() => setActiveTab(3)}
                   className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all border-t border-x -mb-px cursor-pointer select-none

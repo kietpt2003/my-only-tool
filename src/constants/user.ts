@@ -25,6 +25,7 @@ import spent_time_report_guide_3 from '@/assets/spent_time_report_guide_3.png';
 import spent_time_report_guide_4 from '@/assets/spent_time_report_guide_4.png';
 
 export const USER_ROLE = {
+  SUPER_ADMIN: 'super_admin',
   ADMIN: 'admin',
   USER: 'user'
 }

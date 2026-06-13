@@ -13,6 +13,7 @@ import RedmineUserGuideModal from './components/RedmineUserGuideModal';
 import QuickDrafts from './components/QuickDrafts';
 import ChatWidget from '../chat-widget/ChatWidget';
 import PremiumSubscriptionModal from '@/components/PremiumSubscriptionModal';
+import { USER_ROLE } from '@/constants/user';
 
 type TabMode = 'calendar' | 'explorer' | 'create' | 'report';
 
@@ -55,13 +56,24 @@ const RedminePortalScreen: React.FC = observer(() => {
 
   // 👉 Component Helper: Render Badge siêu bắt mắt tùy theo cấp độ gói
   const renderPremiumBadge = (plan?: string) => {
+    if (user?.role === USER_ROLE.SUPER_ADMIN) {
+      return (
+        <button
+          disabled={true}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-purple-600 via-fuchsia-500 to-pink-500 text-white shadow-[0_0_12px_rgba(217,70,239,0.5)] uppercase tracking-wider border border-fuchsia-300/50 transition-transform cursor-default"
+        >
+          <span className="animate-pulse">💎</span> ALL ACCESS
+        </button>
+      );
+    }
+
     if (!plan || plan === PREMIUM_PLAN.NONE) {
       return (
         <button
           onClick={handleOpenUpgradeModal}
           className="inline-flex items-center px-2.5 py-1.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition-colors cursor-pointer"
         >
-          FREE PLAN ➔
+          FREE PLAN
         </button>
       );
     }
