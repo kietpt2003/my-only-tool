@@ -21,10 +21,10 @@ interface PlanConfig {
 }
 
 const PLANS: Record<PlanKey, PlanConfig> = {
-  DAILY: { name: "Daily Pass", subName: "24-hour full access", usdPrice: 0.19 },
-  MONTHLY: { name: "Monthly", subName: "Best for developers", usdPrice: 1.99, badge: "POPULAR" },
-  YEARLY: { name: "Yearly Saver", subName: "Save up to 30%", usdPrice: 3.80, badge: "BEST VALUE" },
-  LIFETIME: { name: "Lifetime VIP", subName: "Pay once, own forever", usdPrice: 5.70, badge: "ULTIMATE" },
+  DAILY: { name: "Daily Pass", subName: "24-hour full access", usdPrice: 4.99 },
+  MONTHLY: { name: "Monthly", subName: "Best for developers", usdPrice: 5.55, badge: "POPULAR" },
+  YEARLY: { name: "Yearly Saver", subName: "Save up to 30%", usdPrice: 7.25, badge: "BEST VALUE" },
+  LIFETIME: { name: "Lifetime VIP", subName: "Pay once, own forever", usdPrice: 9.99, badge: "ULTIMATE" },
 };
 
 const EXCHANGE_RATE = 25500;
