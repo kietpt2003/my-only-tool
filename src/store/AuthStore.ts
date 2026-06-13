@@ -1,6 +1,7 @@
 import { makeAutoObservable, runInAction } from 'mobx';
 import { jwtDecode } from 'jwt-decode';
 import { apiPremiumPlan } from '@/services/apiPremiumPlan';
+import { apiUser } from '@/services/apiUser';
 
 export interface UserPayload {
   id: string;
@@ -8,6 +9,9 @@ export interface UserPayload {
   email: string;
   picture: string;
   role: string;
+  premiumPlan?: string;
+  hasUsedTrial?: boolean;
+  premiumValidUntil?: string;
 }
 
 export class AuthStore {
@@ -39,6 +43,28 @@ export class AuthStore {
     }
 
     this.isChecking = false;
+  }
+
+  fetchUserInfo = async () => {
+    // Nếu không có token (chưa đăng nhập) thì bỏ qua
+    if (!this.token) return;
+
+    try {
+      const response = await apiUser.getMe();
+
+      if (response.success && response.data) {
+        runInAction(() => {
+          // Ghi đè thông tin mới nhất từ DB vào user hiện tại
+          this.user = {
+            ...this.user, // Giữ lại các thuộc tính cũ nếu có
+            ...response.data // Ghi đè bằng data mới (gói VIP mới nhất, quyền admin...)
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi khi đồng bộ thông tin User:", error);
+      // Tùy chọn: Nếu lỗi 401 (token hết hạn/bị xóa), bạn có thể gọi this.logout()
+    }
   }
 
   logout = () => {

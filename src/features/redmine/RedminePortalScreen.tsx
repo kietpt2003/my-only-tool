@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { observer } from 'mobx-react-lite';
 
 import { useStore } from '@/store';
+import { PREMIUM_PLAN } from '@/constants/premiumPlan'; // 👉 Nhớ import PREMIUM_PLAN
 
 import RedmineCalendarTab from './components/RedmineCalendarTab';
 import RedmineExplorerTab from './components/RedmineExplorerTab';
@@ -32,9 +33,12 @@ const RedminePortalScreen: React.FC = observer(() => {
       isLoggingIn,
       showLoginModal,
       setShowLoginModal,
+      isForceLogin,
+      setIsForceLogin
     },
     authStore: {
       user,
+      fetchUserInfo
     }
   } = useStore();
 
@@ -42,8 +46,58 @@ const RedminePortalScreen: React.FC = observer(() => {
   const [isGuideOpen, setIsGuideOpen] = React.useState<boolean>(false);
   const [showPassword, setShowPassword] = React.useState<boolean>(false);
 
-  // 👉 STATE CỤC BỘ ĐỂ KIỂM SOÁT QUYỀN ĐÓNG MODAL
-  const [isForceLogin, setIsForceLogin] = React.useState<boolean>(false);
+  // 👉 Hàm mở Modal nâng cấp nhanh khi bấm vào Badge gói cước
+  const handleOpenUpgradeModal = () => {
+    if (window.showPremiumModal) {
+      window.showPremiumModal(user?.premiumPlan || PREMIUM_PLAN.NONE, user?.hasUsedTrial);
+    }
+  };
+
+  // 👉 Component Helper: Render Badge siêu bắt mắt tùy theo cấp độ gói
+  const renderPremiumBadge = (plan?: string) => {
+    if (!plan || plan === PREMIUM_PLAN.NONE) {
+      return (
+        <button
+          onClick={handleOpenUpgradeModal}
+          className="inline-flex items-center px-2.5 py-1.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition-colors cursor-pointer"
+        >
+          FREE PLAN ➔
+        </button>
+      );
+    }
+
+    if (plan === PREMIUM_PLAN.LIFETIME || plan === PREMIUM_PLAN.YEARLY) {
+      return (
+        <button
+          onClick={handleOpenUpgradeModal}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-400 via-yellow-500 to-orange-500 text-white shadow-[0_0_12px_rgba(245,158,11,0.6)] uppercase tracking-wider border border-yellow-300/50 hover:scale-105 transition-transform cursor-pointer"
+        >
+          <span className="animate-bounce">👑</span> {plan} VIP
+        </button>
+      );
+    }
+
+    if (plan === PREMIUM_PLAN.TRIAL) {
+      return (
+        <button
+          onClick={handleOpenUpgradeModal}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold bg-gradient-to-r from-teal-400 to-emerald-500 text-white shadow-sm uppercase tracking-wider border border-teal-300/50 hover:shadow-md transition-all cursor-pointer"
+        >
+          ⏳ 7-DAY TRIAL
+        </button>
+      );
+    }
+
+    // Mặc định cho DAILY, MONTHLY
+    return (
+      <button
+        onClick={handleOpenUpgradeModal}
+        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-sm uppercase tracking-wider border border-indigo-400/50 hover:shadow-md transition-all cursor-pointer"
+      >
+        ✨ {plan} PRO
+      </button>
+    );
+  };
 
   const handleRedmineLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +106,10 @@ const RedminePortalScreen: React.FC = observer(() => {
       setShowLoginModal(false);
     });
   };
+
+  const checkCashStatus = (callback?: () => void) => {
+    loadUserInfo(undefined, callback);
+  }
 
   React.useEffect(() => {
     // Nếu loadUserInfo kích hoạt callback nghĩa là DB chưa có cấu hình RedmineUrl -> Bắt buộc login
@@ -71,6 +129,10 @@ const RedminePortalScreen: React.FC = observer(() => {
     };
   }, []);
 
+  React.useEffect(() => {
+    fetchUserInfo();
+  }, [activeTab])
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans antialiased pb-12">
       <header className="max-w-[1600px] mx-auto bg-white border border-slate-200 shadow-xs rounded-2xl px-6 py-4 mt-4 flex items-center justify-between gap-4">
@@ -88,16 +150,17 @@ const RedminePortalScreen: React.FC = observer(() => {
         </div>
 
         <div className="flex items-center gap-3">
+          {renderPremiumBadge(user?.premiumPlan)}
+
           {userDisplayName && (
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-xs">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-              {/* Nút bấm giả định để người dùng click update info nếu muốn */}
               <button
                 onClick={() => { setIsForceLogin(false); setShowLoginModal(true); }}
                 className="hover:underline text-left cursor-pointer"
                 title="Click to update credentials"
               >
-                {userDisplayName} ⚙️
+                {userDisplayName}
               </button>
             </div>
           )}
@@ -241,7 +304,7 @@ const RedminePortalScreen: React.FC = observer(() => {
 
       {!showLoginModal && <ChatWidget position='bottom-20 right-6' toastPosition='top-8 right-4' />}
 
-      <PremiumSubscriptionModal userId={user?.id} />
+      <PremiumSubscriptionModal checkCashStatus={checkCashStatus} />
     </div>
   );
 });

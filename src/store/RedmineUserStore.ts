@@ -10,6 +10,8 @@ export class RedmineUserStore {
   showLoginModal: boolean = false;
   loginErrorMessage: string = '';
 
+  isForceLogin: boolean = false;
+
   // Form states cho Modal Đăng nhập Redmine
   redmineUrl: string = '';
   redmineUsername: string = '';
@@ -23,6 +25,7 @@ export class RedmineUserStore {
       setRedmineUsername: action.bound,
       setRedminePassword: action.bound,
       setShowLoginModal: action.bound,
+      setIsForceLogin: action.bound
     });
   }
 
@@ -45,6 +48,10 @@ export class RedmineUserStore {
     this.loginErrorMessage = message;
   }
 
+  setIsForceLogin(val: boolean) {
+    this.isForceLogin = val;
+  }
+
   setRedmineUrl(url: string) {
     this.redmineUrl = url;
   }
@@ -58,7 +65,7 @@ export class RedmineUserStore {
   }
 
   // 👉 Action: Tải thông tin tài khoản hiện tại từ Server API
-  async loadUserInfo(onMissingUrl?: () => void) {
+  async loadUserInfo(onMissingUrl?: () => void, onSuccess?: () => void) {
     this.isLoading = true;
     try {
       const response = await apiRedmine.getMe();
@@ -73,6 +80,8 @@ export class RedmineUserStore {
           if (!this.profile.redmineUrl && onMissingUrl) {
             onMissingUrl();
           }
+
+          onSuccess?.();
         }
       });
     } catch (error) {

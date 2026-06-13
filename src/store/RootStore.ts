@@ -2,6 +2,7 @@ import { AuthStore } from './AuthStore';
 import { ChatStore } from './ChatStore';
 import { DraftStore } from './DraftStore';
 import { LanguagesStore } from './LanguagesStore';
+import { OrderStore } from './OrderStore';
 import { RedmineUserStore } from './RedmineUserStore';
 
 export class RootStore {
@@ -10,6 +11,7 @@ export class RootStore {
   draftStore: DraftStore;
   redmineUserStore: RedmineUserStore;
   chatStore: ChatStore;
+  orderStore: OrderStore;
 
   constructor() {
     this.authStore = new AuthStore();
@@ -17,6 +19,7 @@ export class RootStore {
     this.draftStore = new DraftStore();
     this.redmineUserStore = new RedmineUserStore();
     this.chatStore = new ChatStore();
+    this.orderStore = new OrderStore();
   }
 }
 
