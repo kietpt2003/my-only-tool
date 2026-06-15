@@ -106,10 +106,11 @@ const extractMixedContent = (str: string): ParsedBlock[] => {
         if (count === 0) break;
       }
 
-      // Nếu dấu ngoặc cân bằng (có khả năng là 1 JSON hoàn chỉnh)
+      // Nếu dấu ngoặc cân bằng
       if (count === 0) {
         const possibleJson = str.substring(i, j + 1);
         try {
+          // 1. Thử parse JSON chuẩn
           const parsed = JSON.parse(possibleJson);
           if (textBuffer.trim()) {
             results.push({ type: 'text', content: textBuffer.trim() });
@@ -117,9 +118,24 @@ const extractMixedContent = (str: string): ParsedBlock[] => {
           results.push({ type: 'json', data: parsed });
           textBuffer = "";
           i = j + 1;
-          continue; // Bỏ qua đoạn code bên dưới, quét tiếp đoạn mới
+          continue;
         } catch (e) {
-          // Nếu parse lỗi (ngoặc cân bằng nhưng sai cú pháp), mặc kệ cho rớt xuống textBuffer
+          // 2. 👉 FALLBACK: Nếu có 'undefined' hoặc key không ngoặc kép, dùng JS Eval để cứu dữ liệu
+          try {
+            const jsEval = new Function(`return (${possibleJson});`);
+            const parsedEval = jsEval();
+            if (parsedEval !== null && typeof parsedEval === 'object') {
+              if (textBuffer.trim()) {
+                results.push({ type: 'text', content: textBuffer.trim() });
+              }
+              results.push({ type: 'json', data: parsedEval });
+              textBuffer = "";
+              i = j + 1;
+              continue;
+            }
+          } catch (e2) {
+            // Nếu vẫn lỗi thì bỏ qua, cho rớt xuống textBuffer
+          }
         }
       }
     }
@@ -156,15 +172,21 @@ const JsonFormatter: React.FC = () => {
       return null;
     }
 
+    // 💡 TIỀN XỬ LÝ: Biến đổi các string dị dạng của Console Log thành chuỗi hợp lệ
+    const sanitized = raw
+      .replace(/\[Function([^\]]*)\]/g, '"[Function$1]"') // Cứu [Function Blob], [[Function...]]
+      .replace(/\[Object\]/g, '"[Object]"')               // Cứu [Object]
+      .replace(/\[Circular\]/g, '"[Circular]"');          // Cứu [Circular] (nếu có)
+
     // 1. Thử parse trực tiếp 1 JSON chuẩn
     try {
-      const obj = JSON.parse(raw);
+      const obj = JSON.parse(sanitized);
       setStatus(null);
       return [{ type: 'json', data: obj }];
     } catch (jsonErr: any) {
-      // 2. Thử parse dạng JS Object (Eval)
+      // 2. Thử parse dạng JS Object (Cứu 'undefined', 'NaN', keys unquoted)
       try {
-        const jsEval = new Function(`return (${raw});`);
+        const jsEval = new Function(`return (${sanitized});`);
         const obj = jsEval();
         if (obj !== null && typeof obj === 'object') {
           setStatus(null);
@@ -173,11 +195,11 @@ const JsonFormatter: React.FC = () => {
         throw new Error("Eval failed");
       } catch (jsErr) {
         // 3. Nếu cả 2 đều hỏng, bóc tách Log Console
-        const mixed = extractMixedContent(raw);
+        const mixed = extractMixedContent(sanitized); // Truyền sanitized vào đây
         const hasJson = mixed.some(b => b.type === 'json');
 
         if (hasJson) {
-          setStatus({ message: "✅ Bóc tách JSON hợp lệ thành công từ trong đống Log/Text!", type: 'warning' });
+          setStatus({ message: "✅ Bóc tách dữ liệu hợp lệ thành công từ Log/Text!", type: 'warning' });
           return mixed;
         } else {
           setStatus({ message: `❌ Cú pháp sai hoàn toàn:\n${jsonErr.message}`, type: 'error' });
