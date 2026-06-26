@@ -15,6 +15,7 @@ interface ExtendedAdminUser {
   hasUsedTrial?: boolean;
   premiumPlan?: "NONE" | "TRIAL" | "DAILY" | "MONTHLY" | "YEARLY" | "LIFETIME";
   premiumValidUntil?: string | null;
+  lastLoginAt?: string | null;
 }
 
 const AdminTab: React.FC = observer(() => {
@@ -207,34 +208,34 @@ const AdminTab: React.FC = observer(() => {
           </button>
         </form>
 
-        {/* Bảng danh sách user nâng cao */}
-        {/* 👉 ĐÃ SỬA: Loại bỏ min-w quá lớn, ép w-full tự co giãn trên mọi màn hình */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <table className="w-full border-collapse text-xs text-left table-fixed">
             <thead>
-              {/* 👉 ĐÃ ĐIỀU CHỈNH TỶ LỆ % CÁC CỘT ĐỂ CHỐNG ĐỤNG UI */}
+              {/* 👉 ĐIỀU CHỈNH TỶ LỆ CỘT ĐỘNG DỰA TRÊN isCurrentSuperAdmin */}
               <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold whitespace-nowrap">
-                <th className="px-3 py-2.5 w-[25%]">Email</th>           {/* Giảm từ 30% xuống 25% (vì đã có truncate) */}
-                <th className="px-3 py-2.5 w-[15%]">Role</th>            {/* Tăng từ 10% lên 15% để ôm trọn SUPER_ADMIN 🚀 */}
-                <th className="px-3 py-2.5 w-[15%]">Premium Plan</th>    {/* Tăng từ 13% lên 15% để ôm trọn ALL ACCESS 👑 */}
-                <th className="px-3 py-2.5 w-[15%]">Valid Until</th>     {/* Để 15% font-mono hiển thị rất đẹp */}
-                <th className="px-3 py-2.5 w-[20%] text-center">Premium Actions</th>
+                <th className={`px-3 py-2.5 ${isCurrentSuperAdmin ? 'w-[20%]' : 'w-[25%]'}`}>Email</th>
+                <th className={`px-3 py-2.5 ${isCurrentSuperAdmin ? 'w-[12%]' : 'w-[15%]'}`}>Role</th>
+                <th className={`px-3 py-2.5 ${isCurrentSuperAdmin ? 'w-[13%]' : 'w-[15%]'}`}>Premium Plan</th>
+                <th className="px-3 py-2.5 w-[15%]">Valid Until</th>
+
+                {/* 👉 ĐIỀU KIỆN RENDER CỘT MỚI */}
+                {isCurrentSuperAdmin && (
+                  <th className="px-3 py-2.5 w-[15%]">Last Login</th>
+                )}
+
+                <th className={`px-3 py-2.5 text-center ${isCurrentSuperAdmin ? 'w-[15%]' : 'w-[20%]'}`}>Premium Actions</th>
                 <th className="px-3 py-2.5 w-[10%] text-center">System</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isUsersLoading ? (
-                <tr><td colSpan={6} className="text-center p-6 text-slate-400 italic">Loading users...</td></tr>
+                <tr> <td colSpan={isCurrentSuperAdmin ? 7 : 6} className="text-center p-6 text-slate-400 italic">Loading users...</td></tr>
               ) : users.length === 0 ? (
-                <tr><td colSpan={6} className="text-center p-6 text-slate-400 italic">No users found.</td></tr>
+                <tr><td colSpan={isCurrentSuperAdmin ? 7 : 6} className="text-center p-6 text-slate-400 italic">No users found.</td></tr>
               ) : (
                 users.map((u) => (
                   <tr key={u.email} className="hover:bg-slate-50/50 transition-colors">
-                    {/* Tối ưu hóa cắt chữ Email */}
-                    <td
-                      className="px-3 py-2.5 font-medium text-slate-700 truncate"
-                      title={u.email}
-                    >
+                    <td className="px-3 py-2.5 font-medium text-slate-700 truncate" title={u.email}>
                       {u.email}
                     </td>
                     <td className="px-3 py-2.5">
@@ -262,7 +263,19 @@ const AdminTab: React.FC = observer(() => {
                       }
                     </td>
 
-                    {/* CỘT PREMIUM ACTIONS DROPDOWN ĐÃ ĐƯỢC THU GỌN CHỮ */}
+                    {/* 👉 ĐIỀU KIỆN RENDER NỘI DUNG CỘT LAST LOGIN */}
+                    {isCurrentSuperAdmin && (
+                      <td className="px-3 py-2.5 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                        {u.lastLoginAt
+                          ? new Date(u.lastLoginAt).toLocaleDateString('vi-VN', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit'
+                          })
+                          : "-"
+                        }
+                      </td>
+                    )}
+
                     <td className="px-3 py-2.5 text-center">
                       {u.isSuperAdmin ? (
                         <span className="text-[11px] text-slate-400 italic whitespace-nowrap">Super Admin bypassed</span>
@@ -271,13 +284,11 @@ const AdminTab: React.FC = observer(() => {
                           disabled={!isCurrentSuperAdmin}
                           value={u.premiumPlan || "NONE"}
                           onChange={(e) => handlePlanChange(u.email, u.premiumPlan || "NONE", e.target.value)}
-                          // 👉 ĐÃ SỬA: Thêm pr-7 (padding right) để mũi tên mặc định của trình duyệt không đè lên chữ
                           className={`w-full max-w-[160px] px-2 pr-7 py-1 border border-slate-200 text-slate-700 bg-white rounded-lg text-[11px] font-semibold focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 shadow-2xs transition-all ${!isCurrentSuperAdmin
                             ? "cursor-not-allowed opacity-50 bg-slate-50 border-slate-200 text-slate-400"
                             : "cursor-pointer hover:border-slate-300"
                             }`}
                         >
-                          {/* 👉 ĐÃ SỬA: Rút cực gọn text option để giảm chiều rộng của ô select */}
                           <option value="NONE">❌ NONE (Cancel)</option>
                           <option value="TRIAL">🎁 TRIAL (7d)</option>
                           <option value="DAILY">☀️ DAILY (1d)</option>
