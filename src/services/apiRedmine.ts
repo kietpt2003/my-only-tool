@@ -166,8 +166,11 @@ export const apiRedmine = {
   // 4. TAB 2 & 3: EXPLORER & CREATE TASK - PROJECT & TASK HIERARCHY
   getProjects: () => axiosInstance.get<{ projects: any[] }>('/projects'), // 👉 ĐÃ BỔ SUNG
 
-  getFullProjectTree: (forceReload: boolean, onlyShowMyTasks: boolean) =>
-    axiosInstance.get<any[]>(`/projects/tasks?reload=${forceReload}&onlyShowMyTasks=${onlyShowMyTasks}`),
+  getFullProjectTree: (forceReload: boolean, onlyShowMyTasks: boolean, signal?: AbortSignal, recentOnly: boolean = true) =>
+    axiosInstance.get<any[]>('/v2/projects/tasks', {
+      params: { reload: forceReload, onlyShowMyTasks, recentOnly, compact: true },
+      signal,
+    }),
 
   getProjectTasks: (projectId: number | string) =>
     axiosInstance.get<{ tasks: any[] }>(`/projects/${projectId}/tasks`),
