@@ -1,5 +1,6 @@
 {
   "name": "my-only-tool",
+  "version": "0.0.11",
   "packageManager": "yarn@4.6.0",
   "scripts": {
     "start": "cross-env NODE_ENV=development webpack serve --mode development",

@@ -22,10 +22,12 @@ interface ProjectTree {
   subProjects?: ProjectTree[];
 }
 
-let cachedProjectTree: ProjectTree[] | null = null;
-let cachedLastUpdated: string = 'Never';
+type ExplorerScope = { onlyMyTasks: boolean; recentOnly: boolean; includeInactiveProjects: boolean };
+
+// Remember user selections independently of whether the last fetch succeeded.
 let cachedOnlyMyTasks: boolean = false;
 let cachedRecentOnly: boolean = true;
+let cachedIncludeInactiveProjects: boolean = false;
 
 const RedmineExplorerTab: React.FC = () => {
   const {
@@ -40,14 +42,16 @@ const RedmineExplorerTab: React.FC = () => {
   } = useStore();
   const redmineBaseUrl = redmineUrl || '#';
 
-  const [globalProjectTreeData, setGlobalProjectTreeData] = React.useState<ProjectTree[] | null>(cachedProjectTree);
+  const [globalProjectTreeData, setGlobalProjectTreeData] = React.useState<ProjectTree[] | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
-  const [lastUpdated, setLastUpdated] = React.useState<string>(cachedLastUpdated);
+  const [lastUpdated, setLastUpdated] = React.useState<string>('Never');
   const treeRequest = React.useRef<AbortController | null>(null);
   const [loadError, setLoadError] = React.useState<string>('');
 
   const [onlyMyTasks, setOnlyMyTasks] = React.useState<boolean>(cachedOnlyMyTasks);
   const [recentOnly, setRecentOnly] = React.useState<boolean>(cachedRecentOnly);
+  const [includeInactiveProjects, setIncludeInactiveProjects] = React.useState<boolean>(cachedIncludeInactiveProjects);
+  const scopeRef = React.useRef<ExplorerScope>({ onlyMyTasks: cachedOnlyMyTasks, recentOnly: cachedRecentOnly, includeInactiveProjects: cachedIncludeInactiveProjects });
   const [searchProjectQuery, setSearchProjectQuery] = React.useState<string>('');
   const [searchTaskQuery, setSearchTaskQuery] = React.useState<string>('');
   const [expandedNodes, setExpandedNodes] = React.useState<Record<string, boolean>>({});
@@ -60,7 +64,7 @@ const RedmineExplorerTab: React.FC = () => {
   const [logComments, setLogComments] = React.useState<string>('');
   const [isLoggingTime, setIsLoggingTime] = React.useState<boolean>(false);
 
-  const fetchFullProjectTree = async (forceReload: boolean = false, isOnlyMyTasks: boolean = onlyMyTasks, isRecentOnly: boolean = recentOnly) => {
+  const fetchFullProjectTree = async (forceReload: boolean = false, scope: ExplorerScope = scopeRef.current) => {
     treeRequest.current?.abort();
     treeRequest.current = null;
     const request = new AbortController();
@@ -68,8 +72,9 @@ const RedmineExplorerTab: React.FC = () => {
     setIsLoading(true);
     setLoadError('');
     setGlobalProjectTreeData(null);
+    setLastUpdated('Never');
     try {
-      const response = await apiRedmine.getFullProjectTree(forceReload, isOnlyMyTasks, request.signal, isRecentOnly);
+      const response = await apiRedmine.getFullProjectTree(forceReload, scope.onlyMyTasks, request.signal, scope.recentOnly, scope.includeInactiveProjects);
       if (treeRequest.current !== request) return;
       if (response.data) {
         const newData = response.data;
@@ -77,11 +82,6 @@ const RedmineExplorerTab: React.FC = () => {
         const now = new Date();
         const pad = (num: number) => String(num).padStart(2, '0');
         const formattedTime = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
-        cachedProjectTree = newData;
-        cachedLastUpdated = formattedTime;
-        cachedOnlyMyTasks = isOnlyMyTasks;
-        cachedRecentOnly = isRecentOnly;
 
         setGlobalProjectTreeData(newData);
         setLastUpdated(formattedTime);
@@ -97,17 +97,31 @@ const RedmineExplorerTab: React.FC = () => {
   };
 
   const handleToggleMyTasks = (checked: boolean) => {
+    const scope = { ...scopeRef.current, onlyMyTasks: checked };
+    scopeRef.current = scope;
+    cachedOnlyMyTasks = checked;
     setOnlyMyTasks(checked);
-    fetchFullProjectTree(false, checked);
+    fetchFullProjectTree(false, scope);
   };
 
   const handleToggleRecentTasks = (checked: boolean) => {
+    const scope = { ...scopeRef.current, recentOnly: checked };
+    scopeRef.current = scope;
+    cachedRecentOnly = checked;
     setRecentOnly(checked);
-    fetchFullProjectTree(false, onlyMyTasks, checked);
+    fetchFullProjectTree(!checked, scope);
   };
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
+  };
+
+  const handleToggleInactiveProjects = (checked: boolean) => {
+    const scope = { ...scopeRef.current, includeInactiveProjects: checked };
+    scopeRef.current = scope;
+    cachedIncludeInactiveProjects = checked;
+    setIncludeInactiveProjects(checked);
+    fetchFullProjectTree(false, scope);
   };
 
   const highlightText = (text: string, query: string) => {
@@ -183,7 +197,6 @@ const RedmineExplorerTab: React.FC = () => {
               };
 
               const updatedTree = insertNewTaskIntoTree(prevTree);
-              cachedProjectTree = updatedTree;
               return updatedTree;
             });
 
@@ -266,7 +279,6 @@ const RedmineExplorerTab: React.FC = () => {
           };
 
           const updatedTree = updateProjects(prevTree);
-          cachedProjectTree = updatedTree;
           return updatedTree;
         });
       }
@@ -371,7 +383,7 @@ const RedmineExplorerTab: React.FC = () => {
                   </span>
                 </div>
                 <span className="bg-white border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                  {proj.tasks?.length || 0} Tasks
+                  {treeStats.byProject.get(proj.id) || 0} Tasks
                 </span>
               </div>
 
@@ -463,8 +475,22 @@ const RedmineExplorerTab: React.FC = () => {
     return resultTree;
   }, [globalProjectTreeData, searchProjectQuery, searchTaskQuery, isLoading]);
 
+  const treeStats = React.useMemo(() => {
+    const byProject = new Map<number, number>();
+    let totalProjects = 0;
+    const countTasks = (tasks: Task[]): number => tasks.reduce((sum, task) => sum + 1 + countTasks(task.subtasks || []), 0);
+    const countProjects = (projects: ProjectTree[]): number => projects.reduce((sum, project) => {
+      totalProjects++;
+      const total = countTasks(project.tasks || []) + countProjects(project.subProjects || []);
+      byProject.set(project.id, total);
+      return sum + total;
+    }, 0);
+    const totalTasks = countProjects(filteredTree);
+    return { byProject, totalTasks, totalProjects };
+  }, [filteredTree]);
+
   React.useEffect(() => {
-    fetchFullProjectTree(false, onlyMyTasks);
+    fetchFullProjectTree(false);
     return () => { treeRequest.current?.abort(); };
   }, []);
 
@@ -479,7 +505,7 @@ const RedmineExplorerTab: React.FC = () => {
       <div className="flex flex-col xl:flex-row gap-3 justify-between items-start xl:items-center pb-4 border-b border-slate-100">
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => fetchFullProjectTree(true, onlyMyTasks)}
+            onClick={() => fetchFullProjectTree(true)}
             disabled={isLoading}
             className="px-4 py-2 bg-slate-900 hover:bg-teal-600 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-md"
           >
@@ -513,6 +539,15 @@ const RedmineExplorerTab: React.FC = () => {
             />
             Created: Last 2 Months
           </label>
+          <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors" title="Also load tasks from closed or archived projects you can access">
+            <input
+              type="checkbox"
+              checked={includeInactiveProjects}
+              onChange={(e) => handleToggleInactiveProjects(e.target.checked)}
+              className="accent-teal-600 cursor-pointer w-4 h-4 rounded"
+            />
+            Include Inactive Projects
+          </label>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
           <input
@@ -534,6 +569,11 @@ const RedmineExplorerTab: React.FC = () => {
       <div className="flex justify-between items-center text-xs font-medium text-slate-500">
         <div>
           Last synced: <span className="font-bold text-slate-700">{lastUpdated}</span>
+          <span className="ml-3" title="Includes subtasks and subprojects">
+            {isLoading ? 'Syncing...' : globalProjectTreeData
+              ? `${treeStats.totalTasks.toLocaleString()} tasks · ${treeStats.totalProjects} projects`
+              : 'No data loaded'}
+          </span>
         </div>
         <div className="flex gap-3">
           <button onClick={() => setExpandedNodes({})} className="text-teal-600 font-bold hover:underline cursor-pointer">Collapse All</button>

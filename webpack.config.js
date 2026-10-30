@@ -1,6 +1,8 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const Dotenv = require("dotenv-webpack");
+const { DefinePlugin } = require("webpack");
+const { version } = require("./package.json");
 
 const currentEnv = process.env.NODE_ENV || "development";
 
@@ -34,6 +36,9 @@ module.exports = {
     ],
   },
   plugins: [
+    new DefinePlugin({
+      "process.env.APP_VERSION": JSON.stringify(version),
+    }),
     new HtmlWebpackPlugin({
       template: "./public/index.html",
       favicon: "./public/favicon.ico",
