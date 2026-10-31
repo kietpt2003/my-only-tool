@@ -22,7 +22,7 @@ interface ProjectTree {
   subProjects?: ProjectTree[];
 }
 
-type ExplorerScope = { onlyMyTasks: boolean; recentOnly: boolean; includeInactiveProjects: boolean };
+type ExplorerScope = { onlyMyTasks: boolean; recentOnly: boolean; includeInactiveProjects: boolean; favoritesOnly: boolean };
 
 // Remember user selections independently of whether the last fetch succeeded.
 let cachedOnlyMyTasks: boolean = false;
@@ -46,12 +46,19 @@ const RedmineExplorerTab: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = React.useState<string>('Never');
   const treeRequest = React.useRef<AbortController | null>(null);
+  const favoriteRequest = React.useRef<AbortController | null>(null);
+  const favoriteScopeInitialized = React.useRef(false);
+  const favoriteIdsRef = React.useRef<number[]>([]);
+  const [favoriteIds, setFavoriteIds] = React.useState<number[]>([]);
+  const [isSavingFavorite, setIsSavingFavorite] = React.useState(false);
+  const [favoriteError, setFavoriteError] = React.useState('');
+  const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string>('');
 
   const [onlyMyTasks, setOnlyMyTasks] = React.useState<boolean>(cachedOnlyMyTasks);
   const [recentOnly, setRecentOnly] = React.useState<boolean>(cachedRecentOnly);
   const [includeInactiveProjects, setIncludeInactiveProjects] = React.useState<boolean>(cachedIncludeInactiveProjects);
-  const scopeRef = React.useRef<ExplorerScope>({ onlyMyTasks: cachedOnlyMyTasks, recentOnly: cachedRecentOnly, includeInactiveProjects: cachedIncludeInactiveProjects });
+  const scopeRef = React.useRef<ExplorerScope>({ onlyMyTasks: cachedOnlyMyTasks, recentOnly: cachedRecentOnly, includeInactiveProjects: cachedIncludeInactiveProjects, favoritesOnly: false });
   const [searchProjectQuery, setSearchProjectQuery] = React.useState<string>('');
   const [searchTaskQuery, setSearchTaskQuery] = React.useState<string>('');
   const [expandedNodes, setExpandedNodes] = React.useState<Record<string, boolean>>({});
@@ -65,6 +72,7 @@ const RedmineExplorerTab: React.FC = () => {
   const [isLoggingTime, setIsLoggingTime] = React.useState<boolean>(false);
 
   const fetchFullProjectTree = async (forceReload: boolean = false, scope: ExplorerScope = scopeRef.current) => {
+    if (favoriteRequest.current) return;
     treeRequest.current?.abort();
     treeRequest.current = null;
     const request = new AbortController();
@@ -74,7 +82,20 @@ const RedmineExplorerTab: React.FC = () => {
     setGlobalProjectTreeData(null);
     setLastUpdated('Never');
     try {
-      const response = await apiRedmine.getFullProjectTree(forceReload, scope.onlyMyTasks, request.signal, scope.recentOnly, scope.includeInactiveProjects);
+      const favorites = await apiRedmine.getFavoriteProjects(request.signal);
+      if (request.signal.aborted || treeRequest.current !== request) return;
+      favoriteIdsRef.current = favorites.data.projectIds;
+      setFavoriteIds(favorites.data.projectIds);
+      if (!favoriteScopeInitialized.current) {
+        favoriteScopeInitialized.current = true;
+        scope = { ...scope, favoritesOnly: favorites.data.projectIds.length > 0 };
+        scopeRef.current = scope;
+        setFavoritesOnly(scope.favoritesOnly);
+      }
+      const response = scope.favoritesOnly && !favorites.data.projectIds.length
+        ? { data: [] }
+        : await apiRedmine.getFullProjectTree(forceReload, scope.onlyMyTasks, request.signal, scope.recentOnly, scope.includeInactiveProjects,
+          scope.favoritesOnly ? favorites.data.projectIds : undefined);
       if (treeRequest.current !== request) return;
       if (response.data) {
         const newData = response.data;
@@ -110,6 +131,40 @@ const RedmineExplorerTab: React.FC = () => {
     cachedRecentOnly = checked;
     setRecentOnly(checked);
     fetchFullProjectTree(!checked, scope);
+  };
+
+  const handleToggleFavorites = (checked: boolean) => {
+    const scope = { ...scopeRef.current, favoritesOnly: checked };
+    scopeRef.current = scope;
+    favoriteScopeInitialized.current = true;
+    setFavoritesOnly(checked);
+    fetchFullProjectTree(false, scope);
+  };
+
+  const toggleFavorite = async (projectId: number) => {
+    if (favoriteRequest.current || isLoading) return;
+    const request = new AbortController();
+    favoriteRequest.current = request;
+    setIsSavingFavorite(true);
+    setFavoriteError('');
+    try {
+      const currentIds = favoriteIdsRef.current;
+      const response = currentIds.includes(projectId)
+        ? await apiRedmine.updateFavoriteProjects(currentIds.filter(id => id !== projectId), request.signal)
+        : await apiRedmine.addFavoriteProjects([projectId], request.signal);
+      if (request.signal.aborted) return;
+      favoriteIdsRef.current = response.data.projectIds;
+      setFavoriteIds(response.data.projectIds);
+      favoriteRequest.current = null;
+      if (scopeRef.current.favoritesOnly) await fetchFullProjectTree(false);
+    } catch (error) {
+      if (!request.signal.aborted) setFavoriteError('Unable to save favorite projects. Please try again.');
+    } finally {
+      if (!request.signal.aborted) {
+        favoriteRequest.current = null;
+        setIsSavingFavorite(false);
+      }
+    }
   };
 
   const toggleNode = (nodeId: string) => {
@@ -374,6 +429,17 @@ const RedmineExplorerTab: React.FC = () => {
                   <span className={`text-xs text-slate-500 w-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
                     {hasChildren ? '▶' : '•'}
                   </span>
+                  <button
+                    type="button"
+                    aria-label={`${favoriteIds.includes(proj.id) ? 'Remove' : 'Add'} ${proj.name} ${favoriteIds.includes(proj.id) ? 'from' : 'to'} favorites`}
+                    aria-pressed={favoriteIds.includes(proj.id)}
+                    title={favoriteIds.includes(proj.id) ? 'Remove from favorites' : 'Add to favorites'}
+                    disabled={isSavingFavorite || isLoading}
+                    onClick={e => { e.stopPropagation(); toggleFavorite(proj.id); }}
+                    className={`shrink-0 w-8 h-8 rounded-lg text-xl cursor-pointer hover:bg-amber-50 disabled:opacity-50 disabled:cursor-wait ${favoriteIds.includes(proj.id) ? 'text-amber-500' : 'text-slate-400'}`}
+                  >
+                    {favoriteIds.includes(proj.id) ? '★' : '☆'}
+                  </button>
                   <span className="text-sm">📁</span>
                   <span className="text-xs font-bold text-slate-800">
                     <a href={`${redmineBaseUrl}/projects/${proj.identifier || proj.id}`} target="_blank" rel="noreferrer" className="text-teal-700 hover:underline" onClick={e => e.stopPropagation()}>
@@ -491,7 +557,7 @@ const RedmineExplorerTab: React.FC = () => {
 
   React.useEffect(() => {
     fetchFullProjectTree(false);
-    return () => { treeRequest.current?.abort(); };
+    return () => { treeRequest.current?.abort(); favoriteRequest.current?.abort(); };
   }, []);
 
   React.useEffect(() => {
@@ -506,7 +572,7 @@ const RedmineExplorerTab: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => fetchFullProjectTree(true)}
-            disabled={isLoading}
+            disabled={isLoading || isSavingFavorite}
             className="px-4 py-2 bg-slate-900 hover:bg-teal-600 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-md"
           >
             <svg
@@ -524,6 +590,7 @@ const RedmineExplorerTab: React.FC = () => {
           <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors">
             <input
               type="checkbox"
+              disabled={isSavingFavorite}
               checked={onlyMyTasks}
               onChange={(e) => handleToggleMyTasks(e.target.checked)}
               className="accent-teal-600 cursor-pointer w-4 h-4 rounded"
@@ -533,6 +600,7 @@ const RedmineExplorerTab: React.FC = () => {
           <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors" title="Tasks created within the last two calendar months">
             <input
               type="checkbox"
+              disabled={isSavingFavorite}
               checked={recentOnly}
               onChange={(e) => handleToggleRecentTasks(e.target.checked)}
               className="accent-teal-600 cursor-pointer w-4 h-4 rounded"
@@ -542,11 +610,22 @@ const RedmineExplorerTab: React.FC = () => {
           <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors" title="Also load tasks from closed or archived projects you can access">
             <input
               type="checkbox"
+              disabled={isSavingFavorite}
               checked={includeInactiveProjects}
               onChange={(e) => handleToggleInactiveProjects(e.target.checked)}
               className="accent-teal-600 cursor-pointer w-4 h-4 rounded"
             />
             Include Inactive Projects
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={favoritesOnly}
+              disabled={isSavingFavorite}
+              onChange={e => handleToggleFavorites(e.target.checked)}
+              className="accent-teal-600 cursor-pointer w-4 h-4 rounded"
+            />
+            ★ Only Favorite Projects
           </label>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
@@ -579,6 +658,7 @@ const RedmineExplorerTab: React.FC = () => {
           <button onClick={() => setExpandedNodes({})} className="text-teal-600 font-bold hover:underline cursor-pointer">Collapse All</button>
         </div>
       </div>
+      {favoriteError && <div role="alert" className="text-sm text-rose-600">{favoriteError}</div>}
       {loadError && <div role="alert" className="text-sm text-rose-600">{loadError}</div>}
       <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 overflow-y-auto relative min-h-[500px]">
         {isLoading && (
@@ -594,7 +674,9 @@ const RedmineExplorerTab: React.FC = () => {
             <div className="text-sm text-slate-500 font-medium">
               {(searchProjectQuery || searchTaskQuery)
                 ? "No matching data found"
-                : "No projects to display. Try to sync Redmine."}
+                : favoritesOnly
+                  ? favoriteIds.length ? "No favorite projects match the current filters." : "No favorite projects yet. Turn off Only Favorite Projects and click a project's star."
+                  : "No projects to display. Try to sync Redmine."}
             </div>
           </div>
         ) : (

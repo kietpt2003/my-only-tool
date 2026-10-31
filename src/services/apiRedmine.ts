@@ -166,11 +166,20 @@ export const apiRedmine = {
   // 4. TAB 2 & 3: EXPLORER & CREATE TASK - PROJECT & TASK HIERARCHY
   getProjects: () => axiosInstance.get<{ projects: any[] }>('/projects'), // 👉 ĐÃ BỔ SUNG
 
-  getFullProjectTree: (forceReload: boolean, onlyShowMyTasks: boolean, signal?: AbortSignal, recentOnly: boolean = true, includeInactiveProjects: boolean = false) =>
+  getFullProjectTree: (forceReload: boolean, onlyShowMyTasks: boolean, signal?: AbortSignal, recentOnly: boolean = true, includeInactiveProjects: boolean = false, projectIds?: number[]) =>
     axiosInstance.get<any[]>('/v2/projects/tasks', {
-      params: { reload: forceReload, fullReload: forceReload && !recentOnly, onlyShowMyTasks, recentOnly, includeInactiveProjects, compact: true },
+      params: { reload: forceReload, fullReload: forceReload && !recentOnly, onlyShowMyTasks, recentOnly, includeInactiveProjects, compact: true, ...(projectIds !== undefined ? { projectIds: projectIds.join(',') } : {}) },
       signal,
     }),
+
+  getFavoriteProjects: (signal?: AbortSignal) =>
+    axiosInstance.get<{ projectIds: number[] }>('/projects/favorites', { signal }),
+
+  addFavoriteProjects: (projectIds: number[], signal?: AbortSignal) =>
+    axiosInstance.post<{ projectIds: number[] }>('/projects/favorites', { projectIds }, { signal }),
+
+  updateFavoriteProjects: (projectIds: number[], signal?: AbortSignal) =>
+    axiosInstance.patch<{ projectIds: number[] }>('/projects/favorites', { projectIds }, { signal }),
 
   getProjectTasks: (projectId: number | string) =>
     axiosInstance.get<{ tasks: any[] }>(`/projects/${projectId}/tasks`),
