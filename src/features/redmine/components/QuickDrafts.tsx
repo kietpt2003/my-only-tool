@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 
 import { useStore } from '@/store';
 import DraftItem from './DraftItem';
+import QuickDraftDatePicker, { defaultDraftDate, isWeekendDate } from './QuickDraftDatePicker';
 
 function QuickDrafts() {
   const {
@@ -30,18 +31,32 @@ function QuickDrafts() {
   const [draftHours, setDraftHours] = React.useState('');
   const [draftActivity, setDraftActivity] = React.useState('');
   const [draftTracker, setDraftTracker] = React.useState('5');
-  const [draftDate, setDraftDate] = React.useState('');
+  const [draftDate, setDraftDate] = React.useState(defaultDraftDate);
+  const [allowWeekends, setAllowWeekends] = React.useState(false);
+  const [validationError, setValidationError] = React.useState('');
 
   const handleAddDraft = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!draftSubject || !draftHours || !draftActivity) {
-      alert('Please enter subject, hours and select an Activity!');
+    setValidationError('');
+    if (!draftSubject.trim() || !draftHours || !draftActivity || !draftDate) {
+      setValidationError('Please enter a description, hours, activity and date.');
+      return;
+    }
+
+    const hours = Number(draftHours);
+    const minutes = hours * 60;
+    if (!Number.isFinite(minutes) || minutes < 3 || Math.abs(minutes - Math.round(minutes / 3) * 3) > 1e-8) {
+      setValidationError('Hours must be a multiple of 3 minutes (0.05h). For example: 0.25h, 0.5h or 1h.');
+      return;
+    }
+    if (!allowWeekends && isWeekendDate(draftDate)) {
+      setValidationError('Choose a weekday or enable Saturday & Sunday.');
       return;
     }
 
     addDraft({
       subject: draftSubject,
-      hours: parseFloat(draftHours),
+      hours,
       trackerId: draftTracker,
       activityId: draftActivity,
       spentOn: draftDate
@@ -52,9 +67,6 @@ function QuickDrafts() {
   };
 
   React.useEffect(() => {
-    const today = new Date().toLocaleDateString('en-CA');
-    setDraftDate(today);
-
     loadDraftsFromServer();
     loadQuickDraftTrackers();
     loadActivities();
@@ -110,22 +122,38 @@ function QuickDrafts() {
             <input
               type="number"
               placeholder="Hours"
-              step="0.1"
-              min="0.1"
+              aria-label="Draft hours"
+              aria-describedby="draft-hours-help"
+              required
+              step="0.05"
+              min="0.05"
               value={draftHours}
               onChange={e => setDraftHours(e.target.value)}
               className="w-20 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:border-teal-500"
             />
-            <input
-              type="date"
-              value={draftDate}
-              onChange={e => setDraftDate(e.target.value)}
-              className="flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:border-teal-500"
-            />
+            <QuickDraftDatePicker value={draftDate} allowWeekends={allowWeekends} onChange={value => { setDraftDate(value); setValidationError(''); }} />
             <button type="submit" className="px-3 py-1.5 bg-teal-600 text-white font-bold rounded-lg text-xs hover:bg-teal-700 transition-all cursor-pointer">
               Add
             </button>
           </div>
+          <p id="draft-hours-help" className="text-[10px] leading-relaxed text-slate-500">3-minute steps (0.05h). 1 hour = 60 minutes.</p>
+          <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowWeekends}
+              onChange={event => {
+                const enabled = event.target.checked;
+                setAllowWeekends(enabled);
+                if (!enabled && draftDate && isWeekendDate(draftDate)) {
+                  setDraftDate('');
+                  setValidationError('Weekend selection cleared. Please choose a weekday.');
+                } else setValidationError('');
+              }}
+              className="w-4 h-4 accent-teal-600 cursor-pointer"
+            />
+            Allow Saturday & Sunday
+          </label>
+          {validationError && <p role="alert" className="text-xs leading-relaxed text-rose-600">{validationError}</p>}
         </form>
 
         <input
