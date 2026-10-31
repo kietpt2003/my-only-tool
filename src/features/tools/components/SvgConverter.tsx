@@ -1,9 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { normalizeTracedSvg, parseSvg } from '../utils/normalizeTracedSvg';
+import { formatSvg } from '../utils/formatSvg';
 
 declare global {
   interface Window {
-    ImageTracer: any;
+    ImageTracer?: {
+      imagedataToSVG: (image: ImageData, options: Record<string, number>) => string;
+    };
   }
 }
 
@@ -28,46 +32,52 @@ const SvgConverter: React.FC = () => {
     setIsFakeSvg(false);
 
     setTimeout(() => {
-      const trimmedSvg = svgString.trim();
-      const detectFake = /<image\s/i.test(trimmedSvg) || /data:image\/(png|jpeg|jpg)/i.test(trimmedSvg);
+      try {
+        const trimmedSvg = svgString.trim();
+        const detectFake = /<image\s/i.test(trimmedSvg) || /data:image\/(png|jpeg|jpg)/i.test(trimmedSvg);
 
-      if (detectFake) {
-        setIsFakeSvg(true);
-        setStatus({
-          message: "🚨 FAKE SVG DETECTED! This file contains static images (PNG/JPG) embedded by the designer. The `currentColor` property cannot be used. Please click 'Magical Trace' or ask the designer to redraw!",
-          type: 'error'
-        });
-        setOutputCode(trimmedSvg);
+        if (detectFake) {
+          setIsFakeSvg(true);
+          setStatus({
+            message: "🚨 FAKE SVG DETECTED! This file contains static images (PNG/JPG) embedded by the designer. The `currentColor` property cannot be used. Please click 'Magical Trace' or ask the designer to redraw!",
+            type: 'error'
+          });
+          setOutputCode(formatSvg(trimmedSvg));
+          setIsAnalyzing(false);
+          return;
+        }
+
+        let cleanSvg = trimmedSvg;
+        cleanSvg = cleanSvg.replace(/<defs>[\s\S]*?<\/defs>/gi, "");
+        cleanSvg = cleanSvg.replace(/<clipPath[\s\S]*?<\/clipPath>/gi, "");
+        cleanSvg = cleanSvg.replace(/clip-path="url\([^)]+\)"/gi, "");
+        cleanSvg = cleanSvg.replace(/<desc>[\s\S]*?<\/desc>/gi, "");
+
+        cleanSvg = cleanSvg.replace(/fill="(?!none)(?!white)[^"]+"/gi, 'fill="currentColor"');
+        cleanSvg = cleanSvg.replace(/stroke="(?!none)(?!white)[^"]+"/gi, 'stroke="currentColor"');
+
+        if (/<svg\s/i.test(cleanSvg) && !/viewBox="/i.test(cleanSvg)) {
+          setStatus({
+            message: "⚠️ This SVG is missing a viewBox! react-native-svg may render at the wrong size.",
+            type: 'error'
+          });
+        } else {
+          setStatus({
+            message: "✅ SVG normalization successful! Hardcoded colors have been converted to currentColor.",
+            type: 'success'
+          });
+        }
+
+        cleanSvg = cleanSvg.replace(/width="[^"]+"/i, 'width="100%"');
+        cleanSvg = cleanSvg.replace(/height="[^"]+"/i, 'height="100%"');
+
+        setOutputCode(formatSvg(cleanSvg));
         setIsAnalyzing(false);
-        return;
+      } catch (error) {
+        setIsFakeSvg(false);
+        setStatus({ message: error instanceof Error ? error.message : 'Unable to format this SVG.', type: 'error' });
+        setIsAnalyzing(false);
       }
-
-      let cleanSvg = trimmedSvg;
-      cleanSvg = cleanSvg.replace(/<defs>[\s\S]*?<\/defs>/gi, "");
-      cleanSvg = cleanSvg.replace(/<clipPath[\s\S]*?<\/clipPath>/gi, "");
-      cleanSvg = cleanSvg.replace(/clip-path="url\([^)]+\)"/gi, "");
-      cleanSvg = cleanSvg.replace(/<desc>[\s\S]*?<\/desc>/gi, "");
-
-      cleanSvg = cleanSvg.replace(/fill="(?!none)(?!white)[^"]+"/gi, 'fill="currentColor"');
-      cleanSvg = cleanSvg.replace(/stroke="(?!none)(?!white)[^"]+"/gi, 'stroke="currentColor"');
-
-      if (/<svg\s/i.test(cleanSvg) && !/viewBox="/i.test(cleanSvg)) {
-        setStatus({
-          message: "⚠️ This SVG is missing a viewBox! react-native-svg may render at the wrong size.",
-          type: 'error'
-        });
-      } else {
-        setStatus({
-          message: "✅ SVG normalization successful! Hardcoded colors have been converted to currentColor.",
-          type: 'success'
-        });
-      }
-
-      cleanSvg = cleanSvg.replace(/width="[^"]+"/i, 'width="100%"');
-      cleanSvg = cleanSvg.replace(/height="[^"]+"/i, 'height="100%"');
-
-      setOutputCode(cleanSvg);
-      setIsAnalyzing(false);
     }, 800);
   };
 
@@ -77,68 +87,57 @@ const SvgConverter: React.FC = () => {
 
     setIsTracing(true);
     setIsAnalyzing(true);
+    setStatus(null);
+    setOutputCode('');
 
-    const match = inputCode.match(/(?:xlink:href|href)="(data:image\/(?:png|jpeg|jpg);base64,[^"]+)"/i);
-
-    if (!match || !match[1]) {
-      setStatus({ message: "❌ Error: No embedded image data found for auto-focusing. Ensure the SVG contains a Base64 image.", type: 'error' });
+    const finish = () => {
       setIsTracing(false);
       setIsAnalyzing(false);
-      return;
-    }
+    };
+    const fail = (error: unknown) => {
+      setStatus({ message: `❌ ${error instanceof Error ? error.message : 'Unable to trace this image.'}`, type: 'error' });
+      finish();
+    };
 
-    const base64ImageUrl = match[1];
+    try {
+      const svg = parseSvg(inputCode);
+      const imageUrl = Array.from(svg.querySelectorAll('image'))
+        .map(image => image.getAttribute('href') || image.getAttributeNS('http://www.w3.org/1999/xlink', 'href'))
+        .find(url => url && /^data:image\/(?:png|jpe?g);base64,/i.test(url));
+      if (!imageUrl) throw new Error('No embedded PNG/JPEG image found. Ensure the SVG contains a Base64 image.');
 
-    if (!window.ImageTracer) {
-      alert("ImageTracer library is still loading. Please wait a second and try again!");
-      setIsTracing(false);
-      setIsAnalyzing(false);
-      return;
-    }
+      const tracer = window.ImageTracer;
+      if (!tracer) throw new Error('ImageTracer is unavailable or still loading. Please try again shortly.');
 
-    // Tiến hành gọi thư viện Trace ảnh
-    window.ImageTracer.imageToSVG(
-      base64ImageUrl,
-      (tracedSvgString: string) => {
-        let finalTracedSvg = tracedSvgString;
-
-        const wMatch = finalTracedSvg.match(/width="([\d.]+)"/i);
-        const hMatch = finalTracedSvg.match(/height="([\d.]+)"/i);
-
-        finalTracedSvg = finalTracedSvg.replace(/width="[^"]+"/gi, "");
-        finalTracedSvg = finalTracedSvg.replace(/height="[^"]+"/gi, "");
-
-        if (wMatch && hMatch) {
-          finalTracedSvg = finalTracedSvg.replace(/<svg\s/i, `<svg viewBox="0 0 ${wMatch[1]} ${hMatch[1]}" width="100%" height="100%" `);
-        } else {
-          finalTracedSvg = finalTracedSvg.replace(/<svg\s/i, `<svg viewBox="0 0 512 512" width="100%" height="100%" `);
+      const image = new Image();
+      image.onerror = () => fail(new Error('The embedded image could not be loaded. Check its Base64 data.'));
+      image.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Unable to create a canvas for tracing.');
+          context.drawImage(image, 0, 0);
+          const tracedSvg = tracer.imagedataToSVG(context.getImageData(0, 0, canvas.width, canvas.height), {
+            ltres: 0.5,
+            qtres: 0.5,
+            pathomit: 4,
+            colorsampling: 0,
+            strokewidth: 0,
+          });
+          setOutputCode(formatSvg(normalizeTracedSvg(tracedSvg)));
+          setIsFakeSvg(false);
+          setStatus({ message: '✨ Magic successful! The embedded image has been converted to currentColor SVG paths.', type: 'success' });
+          finish();
+        } catch (error) {
+          fail(error);
         }
-
-        finalTracedSvg = finalTracedSvg.replace(/<(path|rect)[^>]*fill="(rgb\(255,\s*255,\s*255\)|#ffffff|#fff)"[^>]*\/?>(<\/\1>)?/gi, "");
-        finalTracedSvg = finalTracedSvg.replace(/\sstroke="[^"]*"/gi, "");
-        finalTracedSvg = finalTracedSvg.replace(/\sstroke-width="[^"]*"/gi, "");
-
-        finalTracedSvg = finalTracedSvg.replace(/fill="[^"]+"/gi, 'fill="currentColor"');
-
-        setOutputCode(finalTracedSvg);
-        setIsFakeSvg(false); // Reset cờ để hiện nút Copy
-        setStatus({
-          message: "✨ Magic successful! The fake image has been successfully vectorized and maximized to fill the viewport.",
-          type: 'success'
-        });
-
-        // Tắt loading
-        setIsTracing(false);
-        setIsAnalyzing(false);
-      },
-      {
-        ltres: 0.5,
-        qtres: 0.5,
-        pathomit: 4,
-        colorsampling: 0,
-        strokewidth: 1,
-      }
-    );
+      };
+      image.src = imageUrl;
+    } catch (error) {
+      fail(error);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,7 +241,7 @@ const SvgConverter: React.FC = () => {
 
             <button
               onClick={handleMagicalTrace}
-              disabled={!isFakeSvg || isTracing}
+              disabled={!isFakeSvg || isAnalyzing}
               className="flex-1 py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold rounded-xl text-sm shadow-md transition-all hover:brightness-105 active:scale-98 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed cursor-pointer"
             >
               {isTracing ? '✨ Casting Spell (Tracing)...' : '🪄 Magical Trace (Fake SVG → Vector)'}
