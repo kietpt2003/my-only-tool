@@ -33,6 +33,12 @@ const DevToolsTab: React.FC = () => {
 
       <div className="flex flex-wrap gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
         <button
+          onClick={() => navigate('/svg-painter')}
+          className="flex items-center gap-2 px-4 py-2.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg text-sm font-semibold transition-all hover:bg-teal-100 hover:-translate-y-0.5 cursor-pointer"
+        >
+          🎨 SVG Painter
+        </button>
+        <button
           onClick={() => navigate('/svg-converter')}
           className="flex items-center gap-2 px-4 py-2.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg text-sm font-semibold transition-all hover:bg-teal-100 hover:-translate-y-0.5 cursor-pointer"
         >

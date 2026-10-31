@@ -1,8 +1,10 @@
 {
   "name": "my-only-tool",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "packageManager": "yarn@4.6.0",
   "scripts": {
+    "test:svg-painter": "node --test tests/svgPainter.test.cjs tests/rasterImageImport.test.cjs",
+    "test:svg-painter:browser": "node tests/svgPainterPerformance.browser.cjs",
     "start": "cross-env NODE_ENV=development webpack serve --mode development",
     "build-stg": "cross-env NODE_ENV=staging webpack --mode production",
     "build-prod": "cross-env NODE_ENV=production webpack --mode production"

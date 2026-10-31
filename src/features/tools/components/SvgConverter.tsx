@@ -2,14 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { normalizeTracedSvg, parseSvg } from '../utils/normalizeTracedSvg';
 import { formatSvg } from '../utils/formatSvg';
-
-declare global {
-  interface Window {
-    ImageTracer?: {
-      imagedataToSVG: (image: ImageData, options: Record<string, number>) => string;
-    };
-  }
-}
+import { loadImageTracer } from '../utils/imageTracer';
 
 const SvgConverter: React.FC = () => {
   const navigate = useNavigate();
@@ -82,7 +75,7 @@ const SvgConverter: React.FC = () => {
   };
 
   // 2. HÀM ĐỒ NÉT "PHÉP THUẬT" (MAGICAL TRACE)
-  const handleMagicalTrace = () => {
+  const handleMagicalTrace = async () => {
     if (!inputCode.trim()) return;
 
     setIsTracing(true);
@@ -106,8 +99,7 @@ const SvgConverter: React.FC = () => {
         .find(url => url && /^data:image\/(?:png|jpe?g);base64,/i.test(url));
       if (!imageUrl) throw new Error('No embedded PNG/JPEG image found. Ensure the SVG contains a Base64 image.');
 
-      const tracer = window.ImageTracer;
-      if (!tracer) throw new Error('ImageTracer is unavailable or still loading. Please try again shortly.');
+      const tracer = await loadImageTracer();
 
       const image = new Image();
       image.onerror = () => fail(new Error('The embedded image could not be loaded. Check its Base64 data.'));
@@ -162,12 +154,7 @@ const SvgConverter: React.FC = () => {
   };
 
   React.useEffect(() => {
-    if (typeof window !== 'undefined' && !window.ImageTracer) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/imagetracerjs@1.2.6/imagetracer_v1.2.6.js';
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    void loadImageTracer().catch(() => {});
   }, []);
 
   return (

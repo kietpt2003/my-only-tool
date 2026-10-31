@@ -8,6 +8,7 @@ import MainLayout from '@/layouts/MainLayout';
 import LoginScreen from '@/features/auth/components/LoginScreen';
 import JsonFormatter from './features/tools/components/JsonFormatter';
 import SvgConverter from './features/tools/components/SvgConverter';
+import SvgPainter from './features/tools/components/SvgPainter';
 import ExcelEditor from './features/tools/components/ExcelEditor';
 import RedminePortalScreen from './features/redmine/RedminePortalScreen';
 
@@ -46,6 +47,7 @@ const App: React.FC = observer(() => {
         <Route path="/" element={<MainLayout />} />
         <Route path="/json-formatter" element={<JsonFormatter />} />
         <Route path="/svg-converter" element={<SvgConverter />} />
+        <Route path="/svg-painter" element={<SvgPainter />} />
         <Route path="/excel-editor" element={<ExcelEditor />} />
         <Route path="/redmine" element={<RedminePortalScreen />} />
         <Route path="*" element={<Navigate to="/" />} />
