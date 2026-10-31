@@ -20,10 +20,43 @@ export interface PremiumStatusResponse {
 }
 
 // 👉 Định nghĩa Interface cho Request tạo đơn SePay
-export interface CreateSePayOrderRequest {
+export type PaidPlanKey = 'DAILY' | 'MONTHLY' | 'YEARLY' | 'LIFETIME';
+export interface PurchaseChoice {
+  planType: string;
+  buyOneGetOne?: boolean;
+  recipientUserId?: string;
+  amount?: number;
+}
+export interface PurchasePlan {
+  id: PaidPlanKey;
+  name: string;
+  subName: string;
+  vndPrice: number;
+  usdPrice: number;
+  bogoVndPrice: number;
+  bogoUsdPrice: number;
+  bogoEnabled: boolean;
+  badge?: string;
+}
+export interface GiftRecipient { id: string; email: string }
+export interface RecipientPage {
+  success: boolean;
+  data: GiftRecipient[];
+  pagination: { currentPage: number; hasNextPage: boolean; totalItems: number };
+}
+export interface PurchaseInvoice {
+  success: boolean;
+  orderCode: string;
   planType: string;
   amount: number;
+  currency: 'USD' | 'VND';
+  buyOneGetOne: boolean;
+  recipientEmail?: string;
+  memo: string;
+  qrUrl?: string;
+  isExisting: boolean;
 }
+export type CreateSePayOrderRequest = PurchaseChoice;
 
 // 👉 Định nghĩa Interface cho Response tạo mã QR SePay
 export interface SePayOrderResponse {
@@ -48,6 +81,22 @@ export interface OrderStatusResponse {
  * Hệ thống API quản lý và đồng bộ hóa các gói cước VIP/Premium
  */
 export const apiPremiumPlan = {
+  getPlans: async (signal?: AbortSignal) => (await axiosClient.get<{ success: boolean; data: PurchasePlan[] }>('/api/orders/plans', { signal })).data,
+  getGiftRecipients: async (search: string, page = 1, signal?: AbortSignal) =>
+    (await axiosClient.get<RecipientPage>('/api/orders/gift-recipients', { params: { search, page, limit: 20 }, signal })).data,
+  createPaypalOrder: async (choice: PurchaseChoice) =>
+    (await axiosClient.post<PurchaseInvoice & { id: string }>('/api/orders/paypal', choice)).data,
+  capturePaypalOrder: async (orderCode: string) =>
+    (await axiosClient.post<PaypalSuccessResponse>(`/api/orders/paypal/${encodeURIComponent(orderCode)}/capture`)).data,
+  createCashOrder: async (choice: PurchaseChoice) =>
+    (await axiosClient.post<PurchaseInvoice>('/api/orders/cash', choice)).data,
+  correctGiftRecipient: async (code: string, recipientUserId: string) =>
+    (await axiosClient.patch<{ success: boolean; message: string }>(`/api/orders/${encodeURIComponent(code)}/gift-recipient`, { recipientUserId })).data,
+  getPendingCashOrders: async () =>
+    (await axiosClient.get<{ success: boolean; data: Array<PurchaseInvoice & { userEmail: string; orderId: string; createdAt: string; paymentVerifiedAt?: string }> }>('/api/orders/cash/pending')).data,
+  confirmCashOrder: async (code: string) =>
+    (await axiosClient.post<{ success: boolean; message: string }>(`/api/orders/cash/${encodeURIComponent(code)}/confirm`)).data,
+
 
   /**
    * 1. Đồng bộ hóa đơn PayPal thành công lên hệ thống Server
@@ -91,9 +140,9 @@ export const apiPremiumPlan = {
    * 4. Tạo đơn hàng VietQR qua cổng SePay
    * @param data Chứa planType và amount (giá VND)
    */
-  createSePayOrder: async (data: CreateSePayOrderRequest): Promise<SePayOrderResponse> => {
+  createSePayOrder: async (data: CreateSePayOrderRequest): Promise<PurchaseInvoice> => {
     // Lưu ý URL cần khớp với route khai báo ở backend (ví dụ: /api/orders/se-pay)
-    const response = await axiosClient.post<SePayOrderResponse>('/api/orders/se-pay', data);
+    const response = await axiosClient.post<PurchaseInvoice>('/api/orders/se-pay', data);
     return response.data;
   },
 
@@ -101,8 +150,8 @@ export const apiPremiumPlan = {
    * 5. Kiểm tra định kỳ trạng thái của một đơn hàng VietQR (Polling)
    * @param orderCode Mã đơn hàng nội bộ (Ví dụ: MYONLYTOOLM123E4567E89)
    */
-  checkOrderStatus: async (orderCode: string): Promise<OrderStatusResponse> => {
-    const response = await axiosClient.get<OrderStatusResponse>(`/api/orders/status/${orderCode}`);
+  checkOrderStatus: async (orderCode: string, signal?: AbortSignal): Promise<OrderStatusResponse> => {
+    const response = await axiosClient.get<OrderStatusResponse>(`/api/orders/status/${encodeURIComponent(orderCode)}`, { signal });
     return response.data;
   }
 };

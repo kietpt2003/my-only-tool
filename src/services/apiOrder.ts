@@ -4,6 +4,8 @@ export interface OrderItem {
   _id: string;
   orderId: string;
   amount: number;
+  buyOneGetOne?: boolean;
+  recipientEmail?: string;
   planType: string;
   status: number; // Tương ứng với Enum ORDER_STATUS
   paymentMethod: number; // Tương ứng với Enum PAYMENT_METHOD

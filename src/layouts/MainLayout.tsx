@@ -12,6 +12,7 @@ import PaymentHistory from '@/features/order/PaymentHistory';
 import ChatWidget from '@/features/chat-widget/ChatWidget';
 import DonationModal from '@/components/DonationModal';
 import PremiumSubscriptionModal from '@/components/PremiumSubscriptionModal';
+import BuyOneGetOnePromotion from '@/components/BuyOneGetOnePromotion';
 import { USER_ROLE } from '@/constants/user';
 import { useStore } from '@/store';
 import { PREMIUM_PLAN } from '@/constants/premiumPlan';
@@ -164,6 +165,8 @@ const MainLayout: React.FC = () => {
             />
             <span>Redmine Premium</span>
           </button>
+
+          <BuyOneGetOnePromotion placement="home" />
 
           {/* Khu vực Tabs */}
           <div>

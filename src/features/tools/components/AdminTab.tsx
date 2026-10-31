@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useStore } from '@/store';
 import { apiAdmin } from '@/services/apiAdmin';
 import { USER_ROLE } from '@/constants/user';
+import PendingCashOrders from '@/components/PendingCashOrders';
 import { PREMIUM_PLAN } from '@/constants/premiumPlan';
 
 interface ExtendedAdminUser {
@@ -40,17 +41,19 @@ const AdminTab: React.FC = observer(() => {
 
   const isCurrentSuperAdmin = users.find(u => u.email === loggedInUser?.email)?.isSuperAdmin || false;
 
-  const fetchUsers = async () => {
+  const usersRequest = React.useRef(0);
+  const fetchUsers = React.useCallback(async () => {
+    const requestId = ++usersRequest.current;
     setIsUsersLoading(true);
     try {
       const response = await apiAdmin.getUsers();
-      setUsers(response.data);
+      if (requestId === usersRequest.current) setUsers(response.data);
     } catch (error) {
       console.error('Failed to fetch users', error);
     } finally {
-      setIsUsersLoading(false);
+      if (requestId === usersRequest.current) setIsUsersLoading(false);
     }
-  };
+  }, []);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +141,12 @@ const AdminTab: React.FC = observer(() => {
     }
   }, []);
 
+  React.useEffect(() => {
+    const refresh = () => { fetchUsers(); };
+    window.addEventListener('focus', refresh);
+    return () => { window.removeEventListener('focus', refresh); usersRequest.current++; };
+  }, [fetchUsers]);
+
   const renderPlanBadge = (u: ExtendedAdminUser) => {
     if (u.isSuperAdmin) {
       return (
@@ -176,11 +185,14 @@ const AdminTab: React.FC = observer(() => {
         </p>
       </div>
 
+      <PendingCashOrders onFulfilled={fetchUsers} />
+
       {/* SECTION 1: MANAGE USERS */}
       <div className="bg-white border border-rose-100 rounded-2xl p-5 shadow-xs">
-        <h4 className="text-lg font-bold text-rose-700 flex items-center gap-2 mb-4">
-          <span>👥</span> Manage Users & Licenses
-        </h4>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h4 className="text-lg font-bold text-rose-700 flex items-center gap-2"><span>👥</span> Manage Users & Licenses</h4>
+          <button type="button" aria-label="Refresh users" disabled={isUsersLoading} onClick={() => fetchUsers()} className="text-xs font-bold text-teal-700 disabled:opacity-50 cursor-pointer">{isUsersLoading ? 'Refreshing...' : 'Refresh users'}</button>
+        </div>
 
         {/* Form thêm user */}
         <form onSubmit={handleAddUser} className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -229,7 +241,7 @@ const AdminTab: React.FC = observer(() => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isUsersLoading ? (
-                <tr> <td colSpan={isCurrentSuperAdmin ? 7 : 6} className="text-center p-6 text-slate-400 italic">Loading users...</td></tr>
+                <tr><td colSpan={isCurrentSuperAdmin ? 7 : 6} className="text-center p-6 text-slate-400 italic">Loading users...</td></tr>
               ) : users.length === 0 ? (
                 <tr><td colSpan={isCurrentSuperAdmin ? 7 : 6} className="text-center p-6 text-slate-400 italic">No users found.</td></tr>
               ) : (

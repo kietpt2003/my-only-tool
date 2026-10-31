@@ -83,6 +83,7 @@ const PaymentHistory = observer(() => {
                   <span className="font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg text-xs">
                     {order.planType}
                   </span>
+                  {order.buyOneGetOne && <div className="mt-2 text-[11px] text-teal-700"><strong>Buy 1 Get 1</strong><p className="break-all">Gift: {order.recipientEmail}</p></div>}
                 </td>
                 <td className="px-5 py-4 font-black text-slate-800">
                   {order.paymentMethod === 1

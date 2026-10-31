@@ -13,6 +13,7 @@ import RedmineUserGuideModal from './components/RedmineUserGuideModal';
 import QuickDrafts from './components/QuickDrafts';
 import ChatWidget from '../chat-widget/ChatWidget';
 import PremiumSubscriptionModal from '@/components/PremiumSubscriptionModal';
+import BuyOneGetOnePromotion from '@/components/BuyOneGetOnePromotion';
 import { USER_ROLE } from '@/constants/user';
 
 type TabMode = 'calendar' | 'explorer' | 'create' | 'report';
@@ -163,6 +164,7 @@ const RedminePortalScreen: React.FC = observer(() => {
 
         <div className="flex items-center gap-3">
           {renderPremiumBadge(user?.premiumPlan)}
+          <BuyOneGetOnePromotion placement="redmine" blocked={showLoginModal || isForceLogin} compact />
 
           {userDisplayName && (
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-xs">
