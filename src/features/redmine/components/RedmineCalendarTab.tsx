@@ -1,6 +1,8 @@
 import React from 'react';
 import { apiRedmine, MonthlyStatusPayload } from '@/services/apiRedmine';
 
+type CalendarLog = MonthlyStatusPayload['logs'][number];
+
 const RedmineCalendarTab: React.FC = () => {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = React.useState<number>(today.getMonth() + 1);
@@ -13,7 +15,7 @@ const RedmineCalendarTab: React.FC = () => {
   const baseYear = today.getFullYear();
   const yearsList = Array.from({ length: 7 }, (_, i) => baseYear - 2 + i); // Từ năm ngoái -2 đến năm tới +4
 
-  const [tooltipInfo, setTooltipInfo] = React.useState<{ x: number; y: number; log: any } | null>(null);
+  const [tooltipInfo, setTooltipInfo] = React.useState<{ x: number; y: number; below: boolean; log: CalendarLog } | null>(null);
 
   const handlePrevMonth = () => {
     if (currentMonth === 1) {
@@ -38,11 +40,12 @@ const RedmineCalendarTab: React.FC = () => {
     setCurrentYear(today.getFullYear());
   };
 
-  const handleMouseEnterLog = (e: React.MouseEvent, log: any) => {
+  const handleMouseEnterLog = (e: React.MouseEvent | React.FocusEvent, log: CalendarLog) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltipInfo({
-      x: rect.left + rect.width / 2,
-      y: rect.top - 8,
+      x: Math.max(160, Math.min(window.innerWidth - 160, rect.left + rect.width / 2)),
+      y: rect.top < 240 ? rect.bottom + 8 : rect.top - 8,
+      below: rect.top < 240,
       log
     });
   };
@@ -50,6 +53,7 @@ const RedmineCalendarTab: React.FC = () => {
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).getDay();
   const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+  const weekCount = Math.ceil((startOffset + daysInMonth) / 7);
 
   const calculateMaxWorkingHours = () => {
     let workingDays = 0;
@@ -71,11 +75,13 @@ const RedmineCalendarTab: React.FC = () => {
 
   React.useEffect(() => {
     let isMounted = true;
+    setTooltipInfo(null);
     const fetchCalendarData = async () => {
       setIsLoading(true);
       try {
         const response = await apiRedmine.getMonthlyStatus(currentMonth, currentYear);
-        if (isMounted && response.data && Object.keys(response.data).length > 0) {
+        if (!isMounted) return;
+        if (response.data && Object.keys(response.data).length > 0) {
           setMonthData(response.data);
         } else {
           setMonthData({});
@@ -97,14 +103,14 @@ const RedmineCalendarTab: React.FC = () => {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
 
       {/* CALENDAR CONTROLS & PROGRESS */}
-      <div className="flex flex-col xl:flex-row items-center justify-between gap-4 pb-4 border-b border-slate-100">
+      <div className="flex flex-col xl:flex-row items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
-          <button onClick={handlePrevMonth} className="px-3 py-1 text-xs font-bold bg-white rounded-lg border border-slate-200 cursor-pointer shadow-xs hover:bg-slate-50">❮</button>
+          <button aria-label="Previous month" onClick={handlePrevMonth} className="px-3 py-1 text-xs font-bold bg-white rounded-lg border border-slate-200 cursor-pointer shadow-xs hover:bg-slate-50">❮</button>
           <span className="px-4 text-sm font-bold text-slate-700 min-w-[140px] text-center">{monthName}, {currentYear}</span>
-          <button onClick={handleNextMonth} className="px-3 py-1 text-xs font-bold bg-white rounded-lg border border-slate-200 cursor-pointer shadow-xs hover:bg-slate-50">❯</button>
+          <button aria-label="Next month" onClick={handleNextMonth} className="px-3 py-1 text-xs font-bold bg-white rounded-lg border border-slate-200 cursor-pointer shadow-xs hover:bg-slate-50">❯</button>
         </div>
 
         <div className="flex-1 max-w-md w-full space-y-1.5 px-4 hidden md:block">
@@ -120,8 +126,9 @@ const RedmineCalendarTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <select
+            aria-label="Calendar month"
             value={currentMonth}
             onChange={(e) => setCurrentMonth(Number(e.target.value))}
             className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-teal-500 cursor-pointer shadow-xs transition-colors hover:border-slate-300"
@@ -132,6 +139,7 @@ const RedmineCalendarTab: React.FC = () => {
           </select>
 
           <select
+            aria-label="Calendar year"
             value={currentYear}
             onChange={(e) => setCurrentYear(Number(e.target.value))}
             className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-teal-500 cursor-pointer shadow-xs transition-colors hover:border-slate-300"
@@ -147,13 +155,19 @@ const RedmineCalendarTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-7 text-center border-b border-slate-100 bg-slate-50 rounded-xl py-2">
+      <p className="xl:hidden text-[11px] text-slate-500">Scroll horizontally to view the full week. Hover over an entry for full details and comments.</p>
+      <div className="overflow-x-auto rounded-2xl border border-slate-200" role="region" aria-label="Monthly time log calendar" tabIndex={0}>
+      <div className="min-w-[980px]">
+      <div className="grid grid-cols-7 text-center border-b border-slate-100 bg-slate-50 py-2">
         {weekdays.map(day => (
           <div key={day} className="text-xs font-bold text-slate-500 uppercase tracking-wider">{day}</div>
         ))}
       </div>
 
-      <div className="relative grid grid-cols-7 gap-1.5 bg-slate-200/50 p-1.5 rounded-2xl border border-slate-200/80 min-h-[400px]">
+      <div
+        className="relative grid grid-cols-7 gap-px bg-slate-200 h-[clamp(360px,calc(100dvh-330px),720px)]"
+        style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
+      >
 
         {isLoading && (
           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-2xl">
@@ -162,7 +176,7 @@ const RedmineCalendarTab: React.FC = () => {
         )}
 
         {Array.from({ length: startOffset }).map((_, i) => (
-          <div key={`empty-${i}`} className="h-36 bg-slate-50/50 border border-transparent rounded-xl"></div>
+          <div key={`empty-${i}`} aria-hidden="true" className="min-h-0 bg-slate-50"></div>
         ))}
 
         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -170,21 +184,29 @@ const RedmineCalendarTab: React.FC = () => {
           const dateString = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
           const dayData = monthData[dateString];
 
+          const isToday = dayNum === today.getDate() && currentMonth === today.getMonth() + 1 && currentYear === today.getFullYear();
+          const isWeekend = new Date(currentYear, currentMonth - 1, dayNum).getDay() % 6 === 0;
           const hasLogs = dayData?.logs && dayData.logs.length > 0;
           const redmineBaseUrl = dayData?.redmineUrl ? `${dayData.redmineUrl}/issues` : '#';
 
           return (
             <div
               key={dateString}
-              className={`h-36 border rounded-xl p-2 flex flex-col justify-between transition-all group relative overflow-hidden
+              aria-label={`${monthName} ${dayNum}, ${currentYear}`}
+              aria-current={isToday ? 'date' : undefined}
+              className={`min-h-0 min-w-0 p-1.5 flex flex-col gap-1 overflow-hidden transition-colors relative
+                ${isToday ? 'ring-2 ring-inset ring-teal-500' : ''}
                 ${dayData
                   ? (dayData.isFull ? 'bg-emerald-50/60 border-emerald-200 hover:shadow-md' : 'bg-rose-50/40 border-rose-200 hover:shadow-md')
-                  : 'bg-white border-slate-100 hover:border-teal-300'
+                  : isWeekend ? 'bg-slate-50' : 'bg-white'
                 }
                 ${!dayData?.isFull ? 'hover:bg-teal-50/30' : ''}`}
             >
               <div className="flex justify-between items-center shrink-0">
-                <span className="text-xs font-bold text-slate-700">{dayNum}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${isToday ? 'bg-teal-600 text-white' : 'text-slate-700'}`}>{dayNum}</span>
+                  {isToday && <span className="text-[10px] font-bold text-teal-700">Today</span>}
+                </div>
                 {dayData && (
                   <span className={`text-[10px] px-1.5 py-0.5 font-bold rounded-md shadow-xs
                     ${dayData.isFull ? 'bg-emerald-600 text-white' : 'bg-rose-500 text-white'}`}
@@ -194,33 +216,32 @@ const RedmineCalendarTab: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex-1 mt-2 overflow-y-auto min-h-0 space-y-1 pr-1 custom-scrollbar">
-                {hasLogs && dayData.logs.map((log: any) => {
-                  const safeComment = log.comments || 'No comment';
-
+              <div className="flex-1 min-h-0 min-w-0 space-y-1 overflow-y-auto overscroll-contain pr-0.5">
+                {hasLogs && dayData.logs.map((log) => {
                   return (
                     <div
                       key={log.id}
                       onMouseEnter={(e) => handleMouseEnterLog(e, log)}
                       onMouseLeave={() => setTooltipInfo(null)}
-                      className="p-1.5 bg-white border border-slate-200/80 rounded-md text-[10px] space-y-1 cursor-help shadow-2xs border-l-2 border-l-teal-500 hover:bg-slate-50 transition-colors"
+                      onFocus={(e) => handleMouseEnterLog(e, log)}
+                      onBlur={() => setTooltipInfo(null)}
+                      data-calendar-log={log.id}
+                      className="min-w-0 p-1 bg-white border border-slate-200/80 rounded-md shadow-xs border-l-2 border-l-teal-500 hover:border-teal-300 hover:shadow-sm transition-colors [overflow-wrap:anywhere]"
                     >
-                      <div className="flex justify-between font-bold text-slate-700 truncate gap-1">
-                        <span className="truncate">{log.project}</span>
-                        <span className="text-teal-600 font-mono shrink-0">{log.hours}h</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="min-w-0 truncate text-[10px] leading-3 font-semibold text-slate-500">{log.project}</span>
+                        <span className="shrink-0 rounded bg-teal-50 px-1 text-[10px] leading-3 font-bold tabular-nums text-teal-700">{log.hours}h</span>
                       </div>
-                      <div className="text-slate-500 font-medium text-[9px] flex items-center gap-1 truncate">
-                        <a
-                          href={`${redmineBaseUrl}/${log.issueId}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-slate-700 font-bold hover:text-teal-600 hover:underline shrink-0"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          #{log.issueId}
-                        </a>
-                        <span className="truncate">{safeComment}</span>
-                      </div>
+                      <a
+                        href={`${redmineBaseUrl}/${log.issueId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`${weekCount > 5 ? 'line-clamp-1' : 'line-clamp-2'} text-[11px] leading-[14px] font-semibold text-slate-800 hover:text-teal-700 hover:underline focus-visible:outline-2 focus-visible:outline-teal-600 rounded`}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <span className="text-teal-700 font-mono">#{log.issueId}</span>
+                        {log.issueName && <span> · {log.issueName}</span>}
+                      </a>
                     </div>
                   );
                 })}
@@ -230,9 +251,13 @@ const RedmineCalendarTab: React.FC = () => {
         })}
       </div>
 
+      </div>
+      </div>
+
       {tooltipInfo && (
         <div
-          className="fixed z-[99999] w-56 bg-slate-800 text-white p-2.5 rounded-lg shadow-2xl text-xs font-medium leading-relaxed pointer-events-none break-words whitespace-normal -translate-x-1/2 -translate-y-full animate-[fadeIn_0.15s_ease-out]"
+          role="tooltip"
+          className={`fixed z-[99999] w-72 max-w-[calc(100vw-32px)] bg-slate-800 text-white p-2.5 rounded-lg shadow-2xl text-xs font-medium leading-relaxed pointer-events-none break-words whitespace-pre-wrap -translate-x-1/2 ${tooltipInfo.below ? '' : '-translate-y-full'} animate-[fadeIn_0.15s_ease-out]`}
           style={{ left: tooltipInfo.x, top: tooltipInfo.y }}
         >
           <div className="text-teal-400 font-bold">{tooltipInfo.log.project}</div>
@@ -246,10 +271,6 @@ const RedmineCalendarTab: React.FC = () => {
         </div>
       )}
 
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-      `}</style>
     </div>
   );
 };

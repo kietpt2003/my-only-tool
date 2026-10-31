@@ -179,10 +179,12 @@ const RedminePortalScreen: React.FC = observer(() => {
         </div>
       </header>
 
-      <div className="max-w-[1600px] mx-auto px-4 mt-6 grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-        <QuickDrafts />
+      <div className={`mx-auto px-4 mt-6 grid grid-cols-1 gap-6 items-start ${activeTab === 'calendar' ? 'max-w-[1600px]' : 'max-w-[1600px] xl:grid-cols-4'}`}>
+        <div className={activeTab === 'calendar' ? 'order-2 w-full max-w-lg' : ''}>
+          <QuickDrafts />
+        </div>
 
-        <main className="xl:col-span-3 space-y-4">
+        <main className={`min-w-0 space-y-4 ${activeTab === 'calendar' ? 'order-1' : 'xl:col-span-3'}`}>
           <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-px">
             {([
               { id: 'calendar', label: '📅 Calendar' },
